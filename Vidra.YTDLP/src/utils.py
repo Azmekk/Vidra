@@ -2,7 +2,7 @@ import os
 import threading
 from typing import Dict
 from yt_dlp import YoutubeDL
-from schemas import DownloadStatus
+from .schemas import DownloadStatus
 
 download_progresses: Dict[str, dict] = {}
 

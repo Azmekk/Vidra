@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 class VideoInfo(BaseModel):
     id: str
@@ -21,3 +21,25 @@ class DownloadStatus(BaseModel):
     error: Optional[str] = None
     thumbnail: Optional[str] = None
     thumbnail_error: Optional[str] = None
+
+class ThumbnailResponse(BaseModel):
+    thumbnail_url: str
+
+class SizeResponse(BaseModel):
+    filesize_bytes: Optional[int]
+
+class DownloadIdResponse(BaseModel):
+    download_id: str
+
+class FormatsItem(BaseModel):
+    format_id: str
+    ext: Optional[str]
+    format_note: Optional[str]
+    filesize: Optional[int]
+    resolution: Optional[str]
+    fps: Optional[float]
+    vcodec: Optional[str]
+    acodec: Optional[str]
+
+class FormatsResponse(BaseModel):
+    formats: List[FormatsItem]
