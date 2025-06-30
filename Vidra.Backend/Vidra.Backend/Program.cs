@@ -16,6 +16,7 @@ public class Program
         
         builder.RegisterDatabases();
         builder.RegisterClients();
+        builder.RegisterBackgroundServices();
 
         var app = builder.Build();
 

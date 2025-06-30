@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.WebUtilities;
 using Vidra.Backend.Clients.Types.VidraYTDLPClientTypes;
@@ -61,11 +63,9 @@ public class VidraYtdlpClient(HttpClient client)
         var requestBody = new
         {
             url = request.Url,
-            name = request.Name,
             video_format_id = request.VideoFormatId,
             audio_format_id = request.AudioFormatId,
             include_thumbnail = true,
-            thumbnail_filename = request.Name
         };
 
         var response = await client.PostAsJsonAsync("/download", requestBody);
@@ -98,4 +98,5 @@ public class VidraYtdlpClient(HttpClient client)
         var response = await client.PostAsJsonAsync("/combined_video_info", requestBody);
         return await response.Content.ReadFromJsonAsync<CombinedVideoInfo>(jsonOptions);
     }
+
 }

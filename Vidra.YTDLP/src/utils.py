@@ -15,7 +15,7 @@ def get_info(url: str, ydl_opts):
         return info
 
 
-def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool = False, thumbnail_name: str = "", audio_format_id: Optional[str] = None, video_format_id: Optional[str] = None):
+def download_worker(url: str, guid: str, include_thumbnail: bool = False, audio_format_id: Optional[str] = None, video_format_id: Optional[str] = None):
     from .utils import download_progresses  # for circular import safety if needed
     def progress_hook(d):
         if d['status'] == 'downloading':
@@ -42,24 +42,23 @@ def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool
             # Remove entry after short delay
             threading.Timer(60, lambda: download_progresses.pop(guid, None)).start()
 
-    def set_thumbnail_path_with_retry(guid, base_name, retries=3, delay=0.5):
-        thumb_candidate = os.path.join("downloads", f"{base_name}.png")
+    def set_thumbnail_path_with_retry(guid, retries=3, delay=0.5):
+        thumb_candidate = os.path.join("downloads", f"{guid}.png")
         for _ in range(retries):
             if os.path.exists(thumb_candidate):
                 current = download_progresses.get(guid, {})
-                current['final_thumbnail_path'] = thumb_candidate
-                download_progresses[guid] = DownloadStatus(**current).dict()
+                # No longer set 'final_thumbnail_path' in DownloadStatus
                 break
             else:
                 time.sleep(delay)
 
     ydl_opts = {
-        "outtmpl": YDL_OUTTMPL if not name else f"downloads/{name}.%(ext)s",
+        "outtmpl": f"downloads/{guid}.%(ext)s",
         "quiet": True,
         "progress_hooks": [progress_hook],
     }
-    # Always use one of the following for the format string:
-    # video_format_id+bestaudio, best+audio_format_id, or video_format_id+audio_format_id
+
+
     if video_format_id and audio_format_id:
         ydl_opts["format"] = f"{video_format_id}+{audio_format_id}"
     elif video_format_id:
@@ -93,21 +92,14 @@ def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool
 
             # For thumbnail path (if written and converted)
             if include_thumbnail:
-                # yt-dlp does not always return the written thumbnail path, so reconstruct it
-                base_name = thumbnail_name if thumbnail_name else (name if name else info.get("title", guid))
-                thumb_candidate = os.path.join("downloads", f"{base_name}.png")
-                if os.path.exists(thumb_candidate):
-                    thumbnail_path = thumb_candidate
-                else:
-                    # Retry for a short period to catch delayed thumbnail creation
-                    set_thumbnail_path_with_retry(guid, base_name)
-
+                thumb_candidate = os.path.join("downloads", f"{guid}.png")
+                if not os.path.exists(thumb_candidate):
+                    set_thumbnail_path_with_retry(guid)
             # Update download_progresses with final paths
             current = download_progresses.get(guid, {})
             if video_path:
                 current['final_video_path'] = video_path
-            if thumbnail_path:
-                current['final_thumbnail_path'] = thumbnail_path
+            # No longer set 'final_thumbnail_path' in DownloadStatus
             download_progresses[guid] = DownloadStatus(**current).dict()
     except Exception as e:
         download_progresses[guid] = DownloadStatus(status='error', error=str(e)).dict()

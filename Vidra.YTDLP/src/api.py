@@ -51,9 +51,7 @@ def get_size(url: str = Body(..., embed=True, description="URL of the video")):
 @router.post("/download", response_model=DownloadIdResponse)
 def download_video(
     url: str = Body(..., embed=True, description="URL of the video to download"),
-    name: str = Body(None, embed=True, description="Optional name for the downloaded file"),
     include_thumbnail: bool = Body(False, embed=True, description="If true, also download the thumbnail as a PNG"),
-    thumbnail_name: str = Body(None, embed=True, description="Optional name for the thumbnail file"),
     audio_format_id: Optional[str] = Body(None, embed=True, description="Optional audio format ID to download specific audio format"),
     video_format_id: Optional[str] = Body(None, embed=True, description="Optional video format ID to download specific video format")
 ):
@@ -63,7 +61,7 @@ def download_video(
 
     guid = str(uuid.uuid4())
     download_progresses[guid] = {'status': 'queued'}
-    thread = threading.Thread(target=download_worker, args=(url, guid, name, include_thumbnail, thumbnail_name, audio_format_id, video_format_id), daemon=True)
+    thread = threading.Thread(target=download_worker, args=(url, guid, include_thumbnail, audio_format_id, video_format_id), daemon=True)
     thread.start()
 
     return {"download_id": guid}

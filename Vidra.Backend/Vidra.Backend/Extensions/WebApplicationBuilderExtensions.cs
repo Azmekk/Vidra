@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Vidra.Backend.Clients;
 using Vidra.Backend.Database;
+using Vidra.Backend.Services;
 
 namespace Vidra.Backend.Extensions;
 
@@ -30,6 +31,13 @@ public static class WebApplicationBuilderExtensions
         {
             client.BaseAddress = new Uri(baseYtDlpApiUrl);
         });
+        
+        return builder;
+    }
+    
+    public static WebApplicationBuilder RegisterBackgroundServices(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddHostedService<DownloadTrackerService>();
         
         return builder;
     }

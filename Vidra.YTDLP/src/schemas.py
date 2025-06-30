@@ -19,8 +19,6 @@ class DownloadStatus(BaseModel):
     downloaded_bytes: Optional[int] = None
     total_bytes: Optional[int] = None
     error: Optional[str] = None
-    thumbnail: Optional[str] = None
-    thumbnail_error: Optional[str] = None
 
 class ThumbnailResponse(BaseModel):
     thumbnail_url: str

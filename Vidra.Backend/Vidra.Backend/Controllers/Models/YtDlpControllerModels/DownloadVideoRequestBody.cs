@@ -7,6 +7,7 @@ public class DownloadVideoRequestBody
     [Required]
     public string Url { get; set; } = "";
 
+    [Required]
     public string? Name { get; set; } = "";
     public string? VideoFormatId { get; set; } = null;
     public string? AudioFormatId { get; set; } = null;
