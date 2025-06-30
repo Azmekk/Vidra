@@ -55,7 +55,7 @@ public class VidraYtdlpClient(HttpClient client)
         return await response.Content.ReadFromJsonAsync<SizeResponse>(jsonOptions);
     }
 
-    public async Task<DownloadIdResponse?> DownloadVideoAsync(string url, string? name = null, string? formatId = null, bool includeThumbnail = true)
+    public async Task<DownloadIdResponse?> DownloadVideoAsync(string url, string? name = null, string? formatId = null, bool includeThumbnail = false)
     {
         var requestBody = new
         {
