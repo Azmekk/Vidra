@@ -1,4 +1,6 @@
+using Vidra.Backend.Controllers;
 using Vidra.Backend.Extensions;
+using Vidra.Backend.SignalRHubs;
 
 namespace Vidra.Backend;
 
@@ -18,6 +20,8 @@ public class Program
         builder.RegisterClients();
         builder.RegisterBackgroundServices();
 
+        builder.Services.AddSignalR();
+
         var app = builder.Build();
 
         await app.EnsureDatabasesCreatedAsync();
@@ -30,9 +34,12 @@ public class Program
         }
         
         app.UseAuthorization();
+
         
         app.MapControllers();
         app.ConfigureFileServer();
+        
+        app.MapHub<VideoProgressHub>("/hubs/video-progress");
 
         await app.RunAsync();
     }

@@ -16,20 +16,22 @@ public class DownloadStatus
     public string? Error { get; set; }
 }
 
-public delegate void DownloadStatusChangedHandler(ConcurrentDictionary<string, DownloadStatus> downloadStatuses);
+public delegate Task DownloadStatusChangedHandler(ConcurrentDictionary<string, DownloadStatus> downloadStatuses);
+
+public static class DownloadTrackerContainer
+{
+    public static DownloadStatusChangedHandler? OnDownloadStatusChanged = null;
+    public static ConcurrentDictionary<string, DownloadStatus> DownloadStatuses { get; } = new();
+}
 public class DownloadTrackerService(IConfiguration configuration, ILogger<DownloadTrackerService> logger) : BackgroundService
 {
-    public static event DownloadStatusChangedHandler? DownloadStatusChangedHandler;
-    private static ConcurrentDictionary<string, DownloadStatus> DownloadStatuses { get; } = new();
-        
-    static readonly JsonSerializerOptions jsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
-   
-   
+    
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var wsStringUri = configuration.GetValue<string>("DOWNLOAD_STATUS_WS_URL");
@@ -58,15 +60,15 @@ public class DownloadTrackerService(IConfiguration configuration, ILogger<Downlo
             
             try
             {
-                var statuses = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, DownloadStatus>>(message, jsonOptions);
+                var statuses = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, DownloadStatus>>(message, JsonOptions);
                 if (statuses != null)
                 {
                     foreach (var kvp in statuses)
                     {
-                        DownloadStatuses.AddOrUpdate(kvp.Key, kvp.Value, (key, oldValue) => kvp.Value);
+                        DownloadTrackerContainer.DownloadStatuses.AddOrUpdate(kvp.Key, kvp.Value, (key, oldValue) => kvp.Value);
                     }
                     
-                    DownloadStatusChangedHandler?.Invoke(DownloadStatuses);
+                    DownloadTrackerContainer.OnDownloadStatusChanged?.Invoke(DownloadTrackerContainer.DownloadStatuses);
                 }
             }
             catch (Exception ex)
