@@ -1,6 +1,6 @@
 import os
 import threading
-from typing import Dict
+from typing import Dict, Optional
 from yt_dlp import YoutubeDL
 from .schemas import DownloadStatus
 
@@ -13,8 +13,8 @@ def get_info(url: str, ydl_opts):
         info = ydl.extract_info(url, download=False)
         return info
 
-def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool = False):
-    from utils import download_progresses  # for circular import safety if needed
+def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool = False, audio_format_id: Optional[str] = None, video_format_id: Optional[str] = None):
+    from .utils import download_progresses  # for circular import safety if needed
     def progress_hook(d):
         if d['status'] == 'downloading':
             percent = d.get('downloaded_bytes', 0) / max(d.get('total_bytes', 1), 1) * 100 if d.get('total_bytes') else None
@@ -43,9 +43,18 @@ def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool
     ydl_opts = {
         "outtmpl": YDL_OUTTMPL if not name else f"downloads/{name}.%(ext)s",
         "quiet": True,
-        "format": "best",
         "progress_hooks": [progress_hook],
     }
+    # Always use one of the following for the format string:
+    # video_format_id+bestaudio, best+audio_format_id, or video_format_id+audio_format_id
+    if video_format_id and audio_format_id:
+        ydl_opts["format"] = f"{video_format_id}+{audio_format_id}"
+    elif video_format_id:
+        ydl_opts["format"] = f"{video_format_id}+bestaudio"
+    elif audio_format_id:
+        ydl_opts["format"] = f"bestvideo+{audio_format_id}"
+    else:
+        ydl_opts["format"] = "bestvideo+bestaudio"
     if include_thumbnail:
         ydl_opts["writethumbnail"] = True
         ydl_opts["convert-thumbnails"] = "png"

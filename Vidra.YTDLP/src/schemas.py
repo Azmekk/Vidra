@@ -6,10 +6,10 @@ class VideoInfo(BaseModel):
     title: str
     duration: float
     uploader: str
-    view_count: int
-    like_count: int | None
+    view_count: Optional[int] = None
+    like_count: Optional[int] = None
     thumbnail: str
-    filesize: int | None
+    filesize: Optional[int] = None
     url: str
 
 class DownloadStatus(BaseModel):
@@ -31,7 +31,7 @@ class SizeResponse(BaseModel):
 class DownloadIdResponse(BaseModel):
     download_id: str
 
-class FormatsItem(BaseModel):
+class Format(BaseModel):
     format_id: str
     ext: Optional[str]
     format_note: Optional[str]
@@ -42,4 +42,16 @@ class FormatsItem(BaseModel):
     acodec: Optional[str]
 
 class FormatsResponse(BaseModel):
-    formats: List[FormatsItem]
+    formats: List[Format]
+
+class CombinedVideoInfo(BaseModel):
+    id: str
+    title: str
+    duration: float
+    uploader: str
+    view_count: Optional[int] = None
+    like_count: Optional[int] = None
+    thumbnail: str
+    filesize: Optional[int] = None
+    url: str
+    formats: List[Format]
