@@ -1,5 +1,6 @@
 import os
 import threading
+import time  # Added for thumbnail retry
 from typing import Dict, Optional
 from yt_dlp import YoutubeDL
 from .schemas import DownloadStatus
@@ -13,7 +14,8 @@ def get_info(url: str, ydl_opts):
         info = ydl.extract_info(url, download=False)
         return info
 
-def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool = False, audio_format_id: Optional[str] = None, video_format_id: Optional[str] = None):
+
+def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool = False, thumbnail_name: str = "", audio_format_id: Optional[str] = None, video_format_id: Optional[str] = None):
     from .utils import download_progresses  # for circular import safety if needed
     def progress_hook(d):
         if d['status'] == 'downloading':
@@ -40,6 +42,17 @@ def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool
             # Remove entry after short delay
             threading.Timer(60, lambda: download_progresses.pop(guid, None)).start()
 
+    def set_thumbnail_path_with_retry(guid, base_name, retries=3, delay=0.5):
+        thumb_candidate = os.path.join("downloads", f"{base_name}.png")
+        for _ in range(retries):
+            if os.path.exists(thumb_candidate):
+                current = download_progresses.get(guid, {})
+                current['final_thumbnail_path'] = thumb_candidate
+                download_progresses[guid] = DownloadStatus(**current).dict()
+                break
+            else:
+                time.sleep(delay)
+
     ydl_opts = {
         "outtmpl": YDL_OUTTMPL if not name else f"downloads/{name}.%(ext)s",
         "quiet": True,
@@ -62,15 +75,40 @@ def download_worker(url: str, guid: str, name: str = "", include_thumbnail: bool
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            if include_thumbnail and info and ("thumbnails" in info):
-                # Find the PNG thumbnail file
-                base_name = name if name else info.get("title", guid)
-                thumb_path = os.path.join("downloads", f"{base_name}.png")
-                if os.path.exists(thumb_path):
-                    # Update using DownloadStatus to add thumbnail
-                    current = download_progresses.get(guid, {})
-                    current['thumbnail'] = thumb_path
-                    download_progresses[guid] = DownloadStatus(**current).dict()
+
+            if info is None:
+                download_progresses[guid] = DownloadStatus(status='error', error='Failed to extract video info').model_dump()
+                threading.Timer(60, lambda: download_progresses.pop(guid, None)).start()
+                return
+    
+            # After info = ydl.extract_info(url, download=True)
+            video_path = None
+            thumbnail_path = None
+
+            # For video file path
+            if 'requested_downloads' in info and info['requested_downloads']:
+                video_path = info['requested_downloads'][0].get('filepath')
+            elif 'filepath' in info:
+                video_path = info['filepath']
+
+            # For thumbnail path (if written and converted)
+            if include_thumbnail:
+                # yt-dlp does not always return the written thumbnail path, so reconstruct it
+                base_name = thumbnail_name if thumbnail_name else (name if name else info.get("title", guid))
+                thumb_candidate = os.path.join("downloads", f"{base_name}.png")
+                if os.path.exists(thumb_candidate):
+                    thumbnail_path = thumb_candidate
+                else:
+                    # Retry for a short period to catch delayed thumbnail creation
+                    set_thumbnail_path_with_retry(guid, base_name)
+
+            # Update download_progresses with final paths
+            current = download_progresses.get(guid, {})
+            if video_path:
+                current['final_video_path'] = video_path
+            if thumbnail_path:
+                current['final_thumbnail_path'] = thumbnail_path
+            download_progresses[guid] = DownloadStatus(**current).dict()
     except Exception as e:
         download_progresses[guid] = DownloadStatus(status='error', error=str(e)).dict()
         threading.Timer(60, lambda: download_progresses.pop(guid, None)).start()

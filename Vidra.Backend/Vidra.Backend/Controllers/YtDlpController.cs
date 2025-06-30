@@ -17,8 +17,7 @@ public class YtDlpController(VidraYtdlpClient vidraYtdlpClient) : Controller
 
         try
         {
-            var video = await vidraYtdlpClient.DownloadVideoAsync(requestBody.Url, requestBody.Name,
-                requestBody.FormatId);
+            var video = await vidraYtdlpClient.DownloadVideoAsync(requestBody);
             return Ok(video);
         }
         catch (Exception ex)

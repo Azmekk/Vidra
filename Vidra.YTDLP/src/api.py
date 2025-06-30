@@ -6,7 +6,6 @@ from typing import List, Optional
 from .schemas import VideoInfo, DownloadStatus, ThumbnailResponse, SizeResponse, DownloadIdResponse, Format, FormatsResponse, CombinedVideoInfo
 from pydantic import BaseModel
 from .utils import get_info, download_worker, download_progresses
-import logging
 
 router = APIRouter()
 
@@ -54,14 +53,19 @@ def download_video(
     url: str = Body(..., embed=True, description="URL of the video to download"),
     name: str = Body(None, embed=True, description="Optional name for the downloaded file"),
     include_thumbnail: bool = Body(False, embed=True, description="If true, also download the thumbnail as a PNG"),
-    format_id: Optional[str] = Body(None, embed=True, description="Optional format ID to download specific format"),
+    thumbnail_name: str = Body(None, embed=True, description="Optional name for the thumbnail file"),
     audio_format_id: Optional[str] = Body(None, embed=True, description="Optional audio format ID to download specific audio format"),
     video_format_id: Optional[str] = Body(None, embed=True, description="Optional video format ID to download specific video format")
 ):
+    info = get_info(url, YDL_OPTS)
+    if info is None:
+        raise HTTPException(status_code=404, detail="Video info not found")
+
     guid = str(uuid.uuid4())
     download_progresses[guid] = {'status': 'queued'}
-    thread = threading.Thread(target=download_worker, args=(url, guid, name, include_thumbnail, audio_format_id, video_format_id), daemon=True)
+    thread = threading.Thread(target=download_worker, args=(url, guid, name, include_thumbnail, thumbnail_name, audio_format_id, video_format_id), daemon=True)
     thread.start()
+
     return {"download_id": guid}
 
 @router.get("/download_status", response_model=DownloadStatus)
@@ -125,7 +129,6 @@ def get_combined_video_info(url: str = Body(..., embed=True, description="URL of
             }
             for f in info["formats"]
         ]
-        logging.info(f"Combined video info for URL {url}: {info}")
     return {
         "id": info.get("id"),
         "title": info.get("title"),

@@ -8,5 +8,6 @@ public class DownloadVideoRequestBody
     public string Url { get; set; } = "";
 
     public string? Name { get; set; } = "";
-    public string? FormatId { get; set; } = null;
+    public string? VideoFormatId { get; set; } = null;
+    public string? AudioFormatId { get; set; } = null;
 }

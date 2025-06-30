@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.WebUtilities;
 using Vidra.Backend.Clients.Types.VidraYTDLPClientTypes;
+using Vidra.Backend.Controllers.Models.YtDlpControllerModels;
 
 namespace Vidra.Backend.Clients;
 
@@ -55,14 +56,16 @@ public class VidraYtdlpClient(HttpClient client)
         return await response.Content.ReadFromJsonAsync<SizeResponse>(jsonOptions);
     }
 
-    public async Task<DownloadIdResponse?> DownloadVideoAsync(string url, string? name = null, string? formatId = null, bool includeThumbnail = false)
+    public async Task<DownloadIdResponse?> DownloadVideoAsync(DownloadVideoRequestBody request)
     {
         var requestBody = new
         {
-            url = Uri.EscapeDataString(url),
-            name,
-            format_id = formatId,
-            include_thumbnail = includeThumbnail.ToString().ToLower()
+            url = request.Url,
+            name = request.Name,
+            video_format_id = request.VideoFormatId,
+            audio_format_id = request.AudioFormatId,
+            include_thumbnail = true,
+            thumbnail_filename = request.Name
         };
 
         var response = await client.PostAsJsonAsync("/download", requestBody);
