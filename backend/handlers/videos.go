@@ -1,1 +1,275 @@
-package videos
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/Azmekk/Vidra/backend/gen/database"
+	"github.com/Azmekk/Vidra/backend/services"
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type VideoHandler struct {
+	Queries    *database.Queries
+	Downloader *services.DownloaderService
+}
+
+func NewVideoHandler(queries *database.Queries, downloader *services.DownloaderService) *VideoHandler {
+	return &VideoHandler{
+		Queries:    queries,
+		Downloader: downloader,
+	}
+}
+
+type MetadataRequest struct {
+	URL string `json:"url"`
+}
+
+// GetMetadata godoc
+// @Summary Get video metadata and options
+// @Description Fetch available formats and metadata for a given URL using yt-dlp
+// @ID getMetadata
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param request body MetadataRequest true "Video URL"
+// @Success 200 {object} services.VideoMetadata
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/videos/metadata [post]
+func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
+	var req MetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	metadata, err := h.Downloader.GetVideoMetadata(r.Context(), req.URL)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, metadata)
+}
+
+type CreateVideoRequest struct {
+	Name        string `json:"name"`
+	OriginalUrl string `json:"original_url"`
+	FormatID    string `json:"format_id"`
+}
+
+type VideoResponse struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	FileName          string `json:"file_name,omitempty"`
+	ThumbnailFileName string `json:"thumbnail_file_name,omitempty"`
+	OriginalUrl       string `json:"original_url"`
+	DownloadStatus    string `json:"download_status"`
+	CreatedAt         string `json:"created_at"`
+	UpdatedAt         string `json:"updated_at"`
+}
+
+func mapVideoToResponse(v database.Video) VideoResponse {
+	var idStr string
+	v.ID.Scan(&idStr)
+
+	return VideoResponse{
+		ID:                idStr,
+		Name:              v.Name,
+		FileName:          v.FileName.String,
+		ThumbnailFileName: v.ThumbnailFileName.String,
+		OriginalUrl:       v.OriginalUrl,
+		DownloadStatus:    v.DownloadStatus,
+		CreatedAt:         v.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:         v.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+// CreateVideo godoc
+// @Summary Create a new video download task
+// @Description Create a new video record and start background download
+// @ID createVideo
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param video body CreateVideoRequest true "Video details"
+// @Success 201 {object} VideoResponse
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/videos [post]
+func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
+	var req CreateVideoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	video, err := h.Queries.CreateVideo(r.Context(), database.CreateVideoParams{
+		Name:           req.Name,
+		OriginalUrl:    req.OriginalUrl,
+		DownloadStatus: "downloading",
+	})
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Start background download
+	outputPath := fmt.Sprintf("downloads/%s.%%(ext)s", req.Name) // Basic path template
+	h.Downloader.StartDownload(context.Background(), video.ID, req.OriginalUrl, req.FormatID, outputPath)
+
+	h.respondWithJSON(w, http.StatusCreated, mapVideoToResponse(video))
+}
+
+// GetProgress godoc
+// @Summary Get download progress
+// @Description Get the current download progress of a video by ID
+// @ID getProgress
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID"
+// @Success 200 {object} services.DownloadProgress
+// @Failure 404 {object} map[string]string
+// @Router /api/videos/{id}/progress [get]
+func (h *VideoHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	progress, ok := h.Downloader.GetProgress(idStr)
+	if !ok {
+		h.respondWithError(w, http.StatusNotFound, "Progress not found for this ID")
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, progress)
+}
+
+// ListAllProgress godoc
+// @Summary List all video download progress
+// @Description Get the current download progress for all active video downloads
+// @ID listAllProgress
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]services.DownloadProgress
+// @Router /api/videos/progress [get]
+func (h *VideoHandler) ListAllProgress(w http.ResponseWriter, r *http.Request) {
+	allProgress := h.Downloader.GetAllProgress()
+	h.respondWithJSON(w, http.StatusOK, allProgress)
+}
+
+// UpdateYtdlp godoc
+// @Summary Update yt-dlp
+// @Description Execute yt-dlp -U to update the binary
+// @ID updateYtdlp
+// @Tags system
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/system/update-ytdlp [post]
+func (h *VideoHandler) UpdateYtdlp(w http.ResponseWriter, r *http.Request) {
+	output, err := h.Downloader.UpdateYtdlp(r.Context())
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Update failed: %v\nOutput: %s", err, output))
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, map[string]string{"output": output})
+}
+
+// GetVideo godoc
+// @Summary Get a video by ID
+// @Description Get details of a specific video
+// @ID getVideo
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID"
+// @Success 200 {object} VideoResponse
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/videos/{id} [get]
+func (h *VideoHandler) GetVideo(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	var id pgtype.UUID
+	if err := id.Scan(idStr); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid video ID")
+		return
+	}
+
+	video, err := h.Queries.GetVideo(r.Context(), id)
+	if err != nil {
+		h.respondWithError(w, http.StatusNotFound, "Video not found")
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
+}
+
+// ListVideos godoc
+// @Summary List all videos
+// @Description Get a list of all videos
+// @ID listVideos
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Success 200 {array} VideoResponse
+// @Failure 500 {object} map[string]string
+// @Router /api/videos [get]
+func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
+	videos, err := h.Queries.ListVideos(r.Context())
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	responses := make([]VideoResponse, len(videos))
+	for i, v := range videos {
+		responses[i] = mapVideoToResponse(v)
+	}
+
+	h.respondWithJSON(w, http.StatusOK, responses)
+}
+
+// DeleteVideo godoc
+// @Summary Delete a video
+// @Description Delete a video record by ID
+// @ID deleteVideo
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/videos/{id} [delete]
+func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	var id pgtype.UUID
+	if err := id.Scan(idStr); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid video ID")
+		return
+	}
+
+	err := h.Queries.DeleteVideo(r.Context(), id)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *VideoHandler) respondWithError(w http.ResponseWriter, code int, message string) {
+	h.respondWithJSON(w, code, map[string]string{"error": message})
+}
+
+func (h *VideoHandler) respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
