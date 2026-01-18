@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
 	"github.com/Azmekk/Vidra/backend/handlers"
@@ -12,7 +11,6 @@ import (
 	"github.com/Azmekk/Vidra/backend/services"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	_ "github.com/Azmekk/Vidra/backend/gen/docs/swagger"
@@ -20,20 +18,13 @@ import (
 
 func main() {
 	ctx := context.Background()
-	dbUrl := os.Getenv("DATABASE_URL")
-	if dbUrl == "" {
-		dbUrl = "postgres://postgres:postgres@localhost:5432/vidra?sslmode=disable"
-	}
-
-	conn, err := pgx.Connect(ctx, dbUrl)
-	if err != nil {
-		log.Fatalf("Unable to connect to database: %v", err)
-	}
+	conn, port := services.Bootstrap(ctx)
 	defer conn.Close(ctx)
 
 	queries := database.New(conn)
 	downloader := services.NewDownloaderService(queries)
 	videoHandler := handlers.NewVideoHandler(queries, downloader)
+	errorHandler := handlers.NewErrorHandler(queries)
 
 	r := chi.NewRouter()
 
@@ -46,13 +37,14 @@ func main() {
 
 	// Mount routes
 	r.Mount("/api/videos", routers.VideoRouter(videoHandler))
+	r.Mount("/api/system/errors", routers.ErrorRouter(errorHandler))
 
 	// Start server
-	port := ":8080"
-	log.Printf("🌐 Server is running on http://localhost%s\n", port)
+	addr := ":" + port
+	log.Printf("🌐 Server is running on http://localhost%s\n", addr)
 	log.Println("✨ Ready to handle requests!")
 
-	if err := http.ListenAndServe(port, r); err != nil {
+	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("❌ Server failed to start: %v", err)
 	}
 }

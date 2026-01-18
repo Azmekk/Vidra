@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
@@ -28,6 +29,13 @@ type MetadataRequest struct {
 	URL string `json:"url"`
 }
 
+func (r *MetadataRequest) Validate() error {
+	if r.URL == "" {
+		return fmt.Errorf("url is required")
+	}
+	return nil
+}
+
 // GetMetadata godoc
 // @Summary Get video metadata and options
 // @Description Fetch available formats and metadata for a given URL using yt-dlp
@@ -47,6 +55,11 @@ func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := req.Validate(); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	metadata, err := h.Downloader.GetVideoMetadata(r.Context(), req.URL)
 	if err != nil {
 		h.respondWithError(w, http.StatusInternalServerError, err.Error())
@@ -58,31 +71,50 @@ func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 
 type CreateVideoRequest struct {
 	Name        string `json:"name"`
-	OriginalUrl string `json:"original_url"`
-	FormatID    string `json:"format_id"`
+	DownloadURL string `json:"downloadUrl"`
+	FormatID    string `json:"formatId"`
+}
+
+func (r *CreateVideoRequest) Validate() error {
+	if r.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if r.DownloadURL == "" {
+		return fmt.Errorf("downloadUrl is required")
+	}
+	return nil
 }
 
 type VideoResponse struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
-	FileName          string `json:"file_name,omitempty"`
-	ThumbnailFileName string `json:"thumbnail_file_name,omitempty"`
-	OriginalUrl       string `json:"original_url"`
-	DownloadStatus    string `json:"download_status"`
-	CreatedAt         string `json:"created_at"`
-	UpdatedAt         string `json:"updated_at"`
+	FileName          string `json:"fileName,omitempty"`
+	ThumbnailFileName string `json:"thumbnailFileName,omitempty"`
+	DownloadURL       string `json:"downloadUrl"`
+	DownloadStatus    string `json:"downloadStatus"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
+}
+
+func formatUUID(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		id.Bytes[0], id.Bytes[1], id.Bytes[2], id.Bytes[3],
+		id.Bytes[4], id.Bytes[5],
+		id.Bytes[6], id.Bytes[7],
+		id.Bytes[8], id.Bytes[9],
+		id.Bytes[10], id.Bytes[11], id.Bytes[12], id.Bytes[13], id.Bytes[14], id.Bytes[15])
 }
 
 func mapVideoToResponse(v database.Video) VideoResponse {
-	var idStr string
-	v.ID.Scan(&idStr)
-
 	return VideoResponse{
-		ID:                idStr,
+		ID:                formatUUID(v.ID),
 		Name:              v.Name,
 		FileName:          v.FileName.String,
 		ThumbnailFileName: v.ThumbnailFileName.String,
-		OriginalUrl:       v.OriginalUrl,
+		DownloadURL:       v.OriginalUrl,
 		DownloadStatus:    v.DownloadStatus,
 		CreatedAt:         v.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:         v.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
@@ -104,23 +136,36 @@ func mapVideoToResponse(v database.Video) VideoResponse {
 func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	var req CreateVideoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("ERROR: Failed to decode CreateVideo request: %v\n", err)
 		h.respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
+	if err := req.Validate(); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	log.Printf("INFO: Received request to download video: Name='%s', URL='%s', FormatID='%s'\n", req.Name, req.DownloadURL, req.FormatID)
+
 	video, err := h.Queries.CreateVideo(r.Context(), database.CreateVideoParams{
 		Name:           req.Name,
-		OriginalUrl:    req.OriginalUrl,
+		OriginalUrl:    req.DownloadURL,
 		DownloadStatus: "downloading",
 	})
 	if err != nil {
+		log.Printf("ERROR: Failed to create video record in database: %v\n", err)
 		h.respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	var idStr string
+	video.ID.Scan(&idStr)
+	log.Printf("INFO: Successfully created video record in database: ID=%s\n", idStr)
+
 	// Start background download
-	outputPath := fmt.Sprintf("downloads/%s.%%(ext)s", req.Name) // Basic path template
-	h.Downloader.StartDownload(context.Background(), video.ID, req.OriginalUrl, req.FormatID, outputPath)
+	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
+	h.Downloader.StartDownload(context.Background(), video.ID, req.DownloadURL, req.FormatID, req.Name)
 
 	h.respondWithJSON(w, http.StatusCreated, mapVideoToResponse(video))
 }
@@ -133,11 +178,15 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Video ID"
-// @Success 200 {object} services.DownloadProgress
+// @Success 200 {object} services.DownloadProgressDTO
 // @Failure 404 {object} map[string]string
 // @Router /api/videos/{id}/progress [get]
 func (h *VideoHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Missing video ID")
+		return
+	}
 	progress, ok := h.Downloader.GetProgress(idStr)
 	if !ok {
 		h.respondWithError(w, http.StatusNotFound, "Progress not found for this ID")
@@ -154,7 +203,7 @@ func (h *VideoHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
 // @Tags videos
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]services.DownloadProgress
+// @Success 200 {object} map[string]services.DownloadProgressDTO
 // @Router /api/videos/progress [get]
 func (h *VideoHandler) ListAllProgress(w http.ResponseWriter, r *http.Request) {
 	allProgress := h.Downloader.GetAllProgress()

@@ -1,4 +1,4 @@
-CREATE TABLE videos (
+CREATE TABLE IF NOT EXISTS videos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     file_name TEXT,
