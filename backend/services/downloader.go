@@ -353,8 +353,9 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		// 3. Encode to H264 and rename
 		finalFileName := finalBaseName + ".mp4"
 		finalPath := filepath.Join("downloads", finalFileName)
+		tempEncodePath := filepath.Join("downloads", idStr+"_encoded.mp4")
 
-		log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, finalPath)
+		log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, tempEncodePath)
 		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
 
 		// Get duration for progress calculation
@@ -368,7 +369,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 
 		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
 
-		encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", finalPath)
+		encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
 
 		var encodeOutput bytes.Buffer
 		encodeStdout, err := encodeCmd.StdoutPipe()
@@ -405,6 +406,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			outputStr := encodeOutput.String()
 			log.Printf("ERROR [%s]: ffmpeg encoding failed: %v\nOutput: %s\n", idStr, err, outputStr)
 			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
+			os.Remove(tempEncodePath) // Clean up partial encoded file
 
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
@@ -416,6 +418,13 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 				ID:             id,
 				DownloadStatus: string(StatusError),
 			})
+			return
+		}
+
+		// Move encoded file to final path
+		if err := os.Rename(tempEncodePath, finalPath); err != nil {
+			log.Printf("ERROR [%s]: Failed to rename encoded file: %v\n", idStr, err)
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename encoded file: "+err.Error())
 			return
 		}
 

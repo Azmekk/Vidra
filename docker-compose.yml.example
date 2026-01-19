@@ -41,6 +41,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./downloads:/app/downloads:ro
     depends_on:
       - frontend
       - backend

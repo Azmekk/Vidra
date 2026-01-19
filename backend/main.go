@@ -57,10 +57,13 @@ func main() {
 	r.Mount("/api/errors", routers.ErrorRouter(errorHandler))
 	r.Mount("/api/yt-dlp", routers.YtDlpRouter(ytdlpHandler))
 
-	// Serve downloads folder
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "downloads"))
-	r.Handle("/downloads/*", http.StripPrefix("/downloads/", http.FileServer(filesDir)))
+	// Serve downloads folder locally if DEV=true
+	if os.Getenv("DEV") == "true" {
+		workDir, _ := os.Getwd()
+		filesDir := http.Dir(filepath.Join(workDir, "downloads"))
+		r.Handle("/downloads/*", http.StripPrefix("/downloads/", http.FileServer(filesDir)))
+		log.Println("📂 Serving /downloads locally (DEV mode)")
+	}
 
 	// Start server
 	addr := ":" + port
