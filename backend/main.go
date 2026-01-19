@@ -57,8 +57,8 @@ func main() {
 	r.Mount("/api/errors", routers.ErrorRouter(errorHandler))
 	r.Mount("/api/yt-dlp", routers.YtDlpRouter(ytdlpHandler))
 
-	// Serve downloads folder locally if DEV=true
-	if os.Getenv("DEV") == "true" {
+	// Serve downloads folder locally if VIDRA_DEV_ENVIRONMENT=true
+	if os.Getenv("VIDRA_DEV_ENVIRONMENT") == "true" {
 		workDir, _ := os.Getwd()
 		filesDir := http.Dir(filepath.Join(workDir, "downloads"))
 		r.Handle("/downloads/*", http.StripPrefix("/downloads/", http.FileServer(filesDir)))
