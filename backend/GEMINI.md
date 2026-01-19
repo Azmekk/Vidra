@@ -30,6 +30,8 @@ This project is a Go-based backend for a video downloading platform, utilizing `
 
 ## Building and Running
 - **Run the server:** `go run main.go`
+- **Tidy dependencies:** `go mod tidy`
+- **Lint/Check code:** `go vet ./...`
 - **Generate database code:** `sqlc generate` (or run `./scripts/sqlc_generate.sh`)
 - **Initialize/Update Swagger docs:** `swag init -g main.go --output ./gen/docs/swagger` (or run `./scripts/swag_init.sh`)
 - **Create a new migration:** `./scripts/add_migration.sh <migration_name>`
