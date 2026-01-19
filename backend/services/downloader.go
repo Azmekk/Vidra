@@ -68,15 +68,27 @@ type DownloadProgress struct {
 	LastOutput      string
 }
 
-func (p *DownloadProgress) Update(percent, encodingPercent float64, speed, eta string, status DownloadStatus, lastOutput string) {
+func (p *DownloadProgress) Update(ws *WebSocketService, id string, percent, encodingPercent float64, speed, eta string, status DownloadStatus, lastOutput string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.Percent = percent
 	p.EncodingPercent = encodingPercent
 	p.Speed = speed
 	p.ETA = eta
 	p.Status = status
 	p.LastOutput = lastOutput
+	p.mu.Unlock()
+
+	if ws != nil {
+		ws.Broadcast("progress", map[string]interface{}{
+			"id":               id,
+			"percent":          percent,
+			"encodingPercent": encodingPercent,
+			"speed":            speed,
+			"eta":              eta,
+			"status":           status,
+			"last_output":      lastOutput,
+		})
+	}
 }
 
 func (p *DownloadProgress) GetSnapshot() DownloadProgressDTO {
@@ -95,11 +107,13 @@ func (p *DownloadProgress) GetSnapshot() DownloadProgressDTO {
 type DownloaderService struct {
 	progress sync.Map // map[string]*DownloadProgress
 	queries  *database.Queries
+	ws       *WebSocketService
 }
 
-func NewDownloaderService(queries *database.Queries) *DownloaderService {
+func NewDownloaderService(queries *database.Queries, ws *WebSocketService) *DownloaderService {
 	return &DownloaderService{
 		queries: queries,
+		ws:      ws,
 	}
 }
 
@@ -146,17 +160,34 @@ func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
 }
 
 func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
-	cmd := exec.CommandContext(ctx, "yt-dlp", "--dump-json", "--flat-playlist", url)
+	cmd := exec.CommandContext(ctx, "yt-dlp", "--dump-json", "--flat-playlist", "--no-warnings", url)
 	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
-	output, err := cmd.CombinedOutput()
+	
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("ERROR: yt-dlp metadata failed: %v, output: %s\n", err, string(output))
-		return nil, fmt.Errorf("failed to get metadata: %w (output: %s)", err, string(output))
+		log.Printf("ERROR: yt-dlp metadata failed: %v, stderr: %s\n", err, stderr.String())
+		return nil, fmt.Errorf("failed to get metadata: %w (stderr: %s)", err, stderr.String())
 	}
 
+	// yt-dlp might output multiple lines if there's any noise, 
+	// we try to find the line that starts with {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(output, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata: %w", err)
+	lines := strings.Split(string(output), "\n")
+	found := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "{") {
+			if err := json.Unmarshal([]byte(line), &raw); err == nil {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("failed to find valid JSON in yt-dlp output")
 	}
 
 	metadata := &VideoMetadata{
@@ -204,7 +235,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 
 		tempPathPattern := filepath.Join("downloads", idStr+".%(ext)s")
 		log.Printf("INFO [%s]: Starting yt-dlp download with format: %s\n", idStr, f)
-		prog.Update(0, 0, "", "", StatusDownloading, "Starting download...")
+		prog.Update(s.ws, idStr, 0, 0, "", "", StatusDownloading, "Starting download...")
 
 		cmd := exec.Command("yt-dlp", "-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline", url)
 		log.Printf("DEBUG [%s]: Executing command: %s\n", idStr, cmd.String())
@@ -213,14 +244,14 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Printf("ERROR [%s]: Failed to create stdout pipe: %v\n", idStr, err)
-			prog.Update(0, 0, "", "", StatusError, "Failed to create stdout pipe: "+err.Error())
+			prog.Update(s.ws, idStr, 0, 0, "", "", StatusError, "Failed to create stdout pipe: "+err.Error())
 			return
 		}
 		cmd.Stderr = &fullOutput
 
 		if err := cmd.Start(); err != nil {
 			log.Printf("ERROR [%s]: Failed to start yt-dlp: %v\n", idStr, err)
-			prog.Update(0, 0, "", "", StatusError, "Failed to start yt-dlp: "+err.Error())
+			prog.Update(s.ws, idStr, 0, 0, "", "", StatusError, "Failed to start yt-dlp: "+err.Error())
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
 				ErrorMessage: err.Error(),
@@ -244,7 +275,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			matches := progressRegex.FindStringSubmatch(line)
 			if len(matches) == 4 {
 				percent, _ := strconv.ParseFloat(matches[1], 64)
-				prog.Update(percent, 0, matches[2], matches[3], StatusDownloading, line)
+				prog.Update(s.ws, idStr, percent, 0, matches[2], matches[3], StatusDownloading, line)
 			} else {
 				prog.mu.Lock()
 				prog.LastOutput = line
@@ -255,7 +286,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		if err := cmd.Wait(); err != nil {
 			outputStr := fullOutput.String()
 			log.Printf("ERROR [%s]: yt-dlp download failed: %v\nOutput: %s\n", idStr, err, outputStr)
-			prog.Update(prog.Percent, 0, prog.Speed, prog.ETA, StatusError, fmt.Sprintf("Download failed: %v", err))
+			prog.Update(s.ws, idStr, prog.Percent, 0, prog.Speed, prog.ETA, StatusError, fmt.Sprintf("Download failed: %v", err))
 
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
@@ -277,7 +308,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		if len(files) == 0 {
 			msg := "Downloaded file not found in downloads directory"
 			log.Printf("ERROR [%s]: %s\n", idStr, msg)
-			prog.Update(100, 0, "", "", StatusError, msg)
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, msg)
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
 				ErrorMessage: msg,
@@ -304,7 +335,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		if tempFile == "" {
 			msg := "Downloaded video file not found in downloads directory (only found thumbnails)"
 			log.Printf("ERROR [%s]: %s\n", idStr, msg)
-			prog.Update(100, 0, "", "", StatusError, msg)
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, msg)
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
 				ErrorMessage: msg,
@@ -324,7 +355,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		finalPath := filepath.Join("downloads", finalFileName)
 
 		log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, finalPath)
-		prog.Update(100, 0, "", "", StatusEncoding, "Getting video duration...")
+		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
 
 		// Get duration for progress calculation
 		durationCmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", tempFile)
@@ -335,7 +366,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		}
 		log.Printf("INFO [%s]: Video duration: %.2fs\n", idStr, duration)
 
-		prog.Update(100, 0, "", "", StatusEncoding, "Encoding to H264...")
+		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
 
 		encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", finalPath)
 
@@ -343,14 +374,14 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		encodeStdout, err := encodeCmd.StdoutPipe()
 		if err != nil {
 			log.Printf("ERROR [%s]: Failed to create ffmpeg stdout pipe: %v\n", idStr, err)
-			prog.Update(100, 0, "", "", StatusError, "Failed to create ffmpeg stdout pipe: "+err.Error())
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to create ffmpeg stdout pipe: "+err.Error())
 			return
 		}
 		encodeCmd.Stderr = &encodeOutput
 
 		if err := encodeCmd.Start(); err != nil {
 			log.Printf("ERROR [%s]: Failed to start ffmpeg: %v\n", idStr, err)
-			prog.Update(100, 0, "", "", StatusError, "Failed to start ffmpeg: "+err.Error())
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to start ffmpeg: "+err.Error())
 			return
 		}
 
@@ -365,7 +396,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 					if encodingPercent > 100 {
 						encodingPercent = 100
 					}
-					prog.Update(100, encodingPercent, "", "", StatusEncoding, "Encoding in progress...")
+					prog.Update(s.ws, idStr, 100, encodingPercent, "", "", StatusEncoding, "Encoding in progress...")
 				}
 			}
 		}
@@ -373,7 +404,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		if err := encodeCmd.Wait(); err != nil {
 			outputStr := encodeOutput.String()
 			log.Printf("ERROR [%s]: ffmpeg encoding failed: %v\nOutput: %s\n", idStr, err, outputStr)
-			prog.Update(100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
 
 			s.queries.CreateError(context.Background(), database.CreateErrorParams{
 				VideoID:      id,
@@ -422,7 +453,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 
 		// 6. Update database
 		log.Printf("INFO [%s]: Updating database with final file names and status.\n", idStr)
-		prog.Update(100, 100, "", "", StatusFinished, "Processing complete")
+		prog.Update(s.ws, idStr, 100, 100, "", "", StatusFinished, "Processing complete")
 
 		_, err = s.queries.UpdateVideoFiles(context.Background(), database.UpdateVideoFilesParams{
 			ID:                id,

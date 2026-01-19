@@ -32,8 +32,11 @@ func main() {
 	defer pool.Close()
 
 	queries := database.New(pool)
-	downloader := services.NewDownloaderService(queries)
-	videoHandler := handlers.NewVideoHandler(queries, downloader)
+	wsService := services.NewWebSocketService()
+	go wsService.Run()
+
+	downloader := services.NewDownloaderService(queries, wsService)
+	videoHandler := handlers.NewVideoHandler(queries, downloader, wsService)
 	errorHandler := handlers.NewErrorHandler(queries)
 	ytdlpHandler := handlers.NewYtDlpHandler(queries, downloader)
 
@@ -42,6 +45,9 @@ func main() {
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// WebSocket endpoint
+	r.Get("/api/ws", wsService.HandleConnections)
 
 	// Swagger documentation
 	r.Get("/swagger/*", httpSwagger.WrapHandler)

@@ -12,8 +12,9 @@ func SanitizeURL(rawURL string) (string, error) {
 	}
 
 	q := u.Query()
-	if q.Has("list") {
+	if q.Has("list") || q.Has("index") {
 		q.Del("list")
+		q.Del("index")
 		u.RawQuery = q.Encode()
 	}
 

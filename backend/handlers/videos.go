@@ -19,12 +19,14 @@ import (
 type VideoHandler struct {
 	Queries    *database.Queries
 	Downloader *services.DownloaderService
+	Ws         *services.WebSocketService
 }
 
-func NewVideoHandler(queries *database.Queries, downloader *services.DownloaderService) *VideoHandler {
+func NewVideoHandler(queries *database.Queries, downloader *services.DownloaderService, ws *services.WebSocketService) *VideoHandler {
 	return &VideoHandler{
 		Queries:    queries,
 		Downloader: downloader,
+		Ws:         ws,
 	}
 }
 
@@ -177,6 +179,8 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	// Start background download
 	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
 	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name)
+
+	h.Ws.Broadcast("video_created", mapVideoToResponse(video))
 
 	utils.RespondWithJSON(w, http.StatusCreated, mapVideoToResponse(video))
 }
@@ -376,6 +380,8 @@ func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Delete files from filesystem
 	h.Downloader.DeleteVideoFiles(video.FileName.String, video.ThumbnailFileName.String)
+
+	h.Ws.Broadcast("video_deleted", map[string]string{"id": idStr})
 
 	w.WriteHeader(http.StatusNoContent)
 }

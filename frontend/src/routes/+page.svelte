@@ -13,8 +13,7 @@
 	let { data } = $props();
 	let videos: HandlersVideoResponse[] = $state(data.videos || []);
 	let progressMap: Record<string, ServicesDownloadProgressDTO> = $state({});
-	let interval: any;
-	let listInterval: any;
+	let ws: WebSocket;
 
 	let search = $state("");
 	let debouncedSearch = $state("");
@@ -23,6 +22,43 @@
 
 	let editingId = $state<string | null>(null);
 	let editingName = $state("");
+
+	function connectWebSocket() {
+		let backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+		let wsUrl: string;
+
+		if (backendUrl) {
+			wsUrl = backendUrl.replace(/^http/, 'ws') + '/api/ws';
+		} else {
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			const host = window.location.host;
+			wsUrl = `${protocol}//${host}/api/ws`;
+		}
+
+		ws = new WebSocket(wsUrl);
+
+		ws.onmessage = (event) => {
+			const data = JSON.parse(event.data);
+			if (data.type === 'progress') {
+				progressMap[data.payload.id] = data.payload;
+			} else if (data.type === 'video_created') {
+				videos = [data.payload, ...videos];
+			} else if (data.type === 'video_deleted') {
+				videos = videos.filter(v => v.id !== data.payload.id);
+				delete progressMap[data.payload.id];
+			}
+		};
+
+		ws.onclose = () => {
+			console.log('WebSocket disconnected, retrying in 3s...');
+			setTimeout(connectWebSocket, 3000);
+		};
+
+		ws.onerror = (err) => {
+			console.error('WebSocket error:', err);
+			ws.close();
+		};
+	}
 
 	async function fetchVideos(query: string, sort: string) {
 		isLoading = true;
@@ -81,33 +117,21 @@
 		}, 2000);
 	}
 
-	async function updateProgress() {
-		try {
-			const res = await videosApi.listAllProgress();
-			progressMap = res.data;
-		} catch (e) {
-			console.error('Error fetching progress', e);
-		}
-	}
-
 	async function deleteVideo(id: string) {
 		if (!confirm('Are you sure you want to delete this video?')) return;
 		try {
 			await videosApi.deleteVideo(id);
-			await fetchVideos(debouncedSearch, order);
+			// No need to manually refresh or filter, WebSocket will handle video_deleted event
 		} catch (e) {
 			console.error('Error deleting video', e);
 		}
 	}
 
 	onMount(() => {
-		updateProgress();
-		interval = setInterval(updateProgress, 1000);
-		listInterval = setInterval(() => fetchVideos(debouncedSearch, order), 5000);
+		connectWebSocket();
 
 		return () => {
-			clearInterval(interval);
-			clearInterval(listInterval);
+			if (ws) ws.close();
 		}
 	});
 
