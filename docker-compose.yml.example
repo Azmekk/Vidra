@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:18-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -15,6 +16,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgres://postgres:password@db:5432/vidra?sslmode=disable
       PORT: 8080
@@ -23,18 +25,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    restart: always
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     environment:
       VITE_BACKEND_URL: http://backend:8080
     depends_on:
       - backend
-    restart: always
 
   proxy:
     image: nginx:alpine
+    restart: unless-stopped
     ports:
       - "80:80"
     volumes:
