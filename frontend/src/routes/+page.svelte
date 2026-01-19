@@ -275,14 +275,14 @@
               controls
               autoplay
               playsinline
-              class="h-full w-full"
+              class="h-full w-full object-contain"
             >
               <track kind="captions" />
             </video>
           </div>
         {:else}
           <button
-            class="relative aspect-video w-full overflow-hidden bg-muted transition-all"
+            class="relative aspect-video w-full overflow-hidden bg-black transition-all"
             onclick={() => isCompleted && video.id && togglePlay(video.id)}
             disabled={!isCompleted}
           >
@@ -290,7 +290,7 @@
               <img
                 src={`/downloads/${video.thumbnailFileName}`}
                 alt={video.name}
-                class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                class="h-full w-full object-contain transition-transform duration-700 group-hover:scale-110"
               />
             {:else}
               <div
