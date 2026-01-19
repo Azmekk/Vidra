@@ -269,7 +269,7 @@
         class="group relative flex flex-col overflow-hidden rounded-[2rem] border bg-card transition-all hover:shadow-2xl hover:shadow-primary/5"
       >
         {#if isActive && isCompleted}
-          <div class="aspect-video w-full bg-black">
+          <div class="aspect-video w-full overflow-hidden bg-black">
             <video
               src={`/downloads/${video.fileName}`}
               controls
