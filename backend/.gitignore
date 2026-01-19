@@ -1,2 +1,4 @@
 gen/
 downloads/
+.env
+.env.local

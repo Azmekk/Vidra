@@ -2,9 +2,13 @@
 FROM golang:1.25.6-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev git
 
 WORKDIR /app
+
+# Install sqlc and swag
+RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest && \
+    go install github.com/swaggo/swag/cmd/swag@latest
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -12,6 +16,10 @@ RUN go mod download
 
 # Copy the rest of the application code
 COPY . .
+
+# Generate code
+RUN sqlc generate
+RUN swag init --output ./gen/docs/swagger
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .

@@ -1,0 +1,5 @@
+downloads/
+gen/
+.git/
+.env
+.DS_Store
