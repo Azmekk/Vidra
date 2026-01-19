@@ -60,6 +60,18 @@
       const data = JSON.parse(event.data);
       if (data.type === "progress") {
         progressMap[data.payload.id] = data.payload;
+        if (data.payload.status === "completed") {
+          (async () => {
+            try {
+              const res = await videosApi.getVideo(data.payload.id);
+              videos = videos.map((v) =>
+                v.id === data.payload.id ? res.data : v,
+              );
+            } catch (e) {
+              console.error("Error fetching updated video:", e);
+            }
+          })();
+        }
       } else if (data.type === "video_created") {
         videos = [data.payload, ...videos];
       } else if (data.type === "video_deleted") {
