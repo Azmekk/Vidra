@@ -38,6 +38,7 @@ WORKDIR /app
 
 # Copy the binary from the builder
 COPY --from=builder /app/main .
+COPY --from=builder /app/sql ./sql
 
 # Create the downloads directory
 RUN mkdir -p downloads
