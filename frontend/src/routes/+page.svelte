@@ -220,6 +220,8 @@
 							src={`/downloads/${video.fileName}`} 
 							controls 
 							autoplay 
+							playsinline
+							webkit-playsinline
 							class="h-full w-full"
 						>
 							<track kind="captions" />
