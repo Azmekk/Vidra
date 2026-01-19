@@ -44,7 +44,7 @@ const (
 	StatusPending     DownloadStatus = "pending"
 	StatusDownloading DownloadStatus = "downloading"
 	StatusEncoding    DownloadStatus = "encoding"
-	StatusFinished    DownloadStatus = "finished"
+	StatusFinished    DownloadStatus = "completed"
 	StatusError       DownloadStatus = "error"
 )
 
@@ -185,7 +185,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		log.Printf("INFO [%s]: Starting yt-dlp download with format: %s\n", idStr, f)
 		prog.Update(0, 0, "", "", StatusDownloading, "Starting download...")
 
-		cmd := exec.Command("yt-dlp", "-f", f, "-o", tempPathPattern, "--newline", url)
+		cmd := exec.Command("yt-dlp", "-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline", url)
 		var fullOutput bytes.Buffer
 
 		stdout, err := cmd.StdoutPipe()
@@ -204,6 +204,10 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 				ErrorMessage: err.Error(),
 				Command:      "yt-dlp (start)",
 				Output:       "",
+			})
+			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+				ID:             id,
+				DownloadStatus: string(StatusError),
 			})
 			return
 		}
@@ -237,6 +241,10 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 				Command:      "yt-dlp",
 				Output:       outputStr,
 			})
+			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+				ID:             id,
+				DownloadStatus: string(StatusError),
+			})
 			return
 		}
 
@@ -253,6 +261,10 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 				ErrorMessage: msg,
 				Command:      "file-glob",
 				Output:       "",
+			})
+			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+				ID:             id,
+				DownloadStatus: string(StatusError),
 			})
 			return
 		}
@@ -321,31 +333,53 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 				Command:      "ffmpeg",
 				Output:       outputStr,
 			})
+			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+				ID:             id,
+				DownloadStatus: string(StatusError),
+			})
 			return
 		}
 
 		log.Printf("INFO [%s]: Encoding successful. Cleaning up temporary file: %s\n", idStr, tempFile)
 
-		// 4. Cleanup temp file
+		// 4. Handle thumbnail
+		finalThumbnailName := finalBaseName + ".jpg"
+		finalThumbnailPath := filepath.Join("downloads", finalThumbnailName)
+		
+		// yt-dlp saves thumbnail as idStr.jpg due to --convert-thumbnails jpg and our -o pattern
+		tempThumbnailPath := filepath.Join("downloads", idStr+".jpg")
+		if _, err := os.Stat(tempThumbnailPath); err == nil {
+			log.Printf("INFO [%s]: Found thumbnail: %s, renaming to: %s\n", idStr, tempThumbnailPath, finalThumbnailPath)
+			if err := os.Rename(tempThumbnailPath, finalThumbnailPath); err != nil {
+				log.Printf("WARN [%s]: Failed to rename thumbnail: %v\n", idStr, err)
+				finalThumbnailName = "" // Reset if rename failed
+			}
+		} else {
+			log.Printf("WARN [%s]: Thumbnail not found at %s\n", idStr, tempThumbnailPath)
+			finalThumbnailName = ""
+		}
+
+		// 5. Cleanup temp file
 		if err := os.Remove(tempFile); err != nil {
 			log.Printf("WARN [%s]: Failed to remove temporary file: %v\n", idStr, err)
 		}
 
-		// 5. Update database
-		log.Printf("INFO [%s]: Updating database with final file name and status.\n", idStr)
+		// 6. Update database
+		log.Printf("INFO [%s]: Updating database with final file names and status.\n", idStr)
 		prog.Update(100, 100, "", "", StatusFinished, "Processing complete")
 
 		_, err = s.queries.UpdateVideoFiles(context.Background(), database.UpdateVideoFilesParams{
-			ID:       id,
-			FileName: pgtype.Text{String: finalFileName, Valid: true},
+			ID:                id,
+			FileName:          pgtype.Text{String: finalFileName, Valid: true},
+			ThumbnailFileName: pgtype.Text{String: finalThumbnailName, Valid: finalThumbnailName != ""},
 		})
 		if err != nil {
-			log.Printf("ERROR [%s]: Failed to update video file name in database: %v\n", idStr, err)
+			log.Printf("ERROR [%s]: Failed to update video file names in database: %v\n", idStr, err)
 		}
 
 		_, err = s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
 			ID:             id,
-			DownloadStatus: "completed",
+			DownloadStatus: string(StatusFinished),
 		})
 		if err != nil {
 			log.Printf("ERROR [%s]: Failed to update video status in database: %v\n", idStr, err)

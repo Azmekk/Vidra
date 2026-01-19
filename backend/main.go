@@ -1,9 +1,19 @@
+// @title Vidra API
+// @version 1.0
+// @description REST API for Vidra video downloader and manager
+// @termsOfService https://github.com/Azmekk/Vidra
+// @contact.name Martin Yordanov
+// @contact.url https://github.com/Azmekk/Vidra
+// @contact.email martin.yordanov@vexbyte.com
+// @BasePath /
 package main
 
 import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
 	"github.com/Azmekk/Vidra/backend/handlers"
@@ -18,13 +28,14 @@ import (
 
 func main() {
 	ctx := context.Background()
-	conn, port := services.Bootstrap(ctx)
-	defer conn.Close(ctx)
+	pool, port := services.Bootstrap(ctx)
+	defer pool.Close()
 
-	queries := database.New(conn)
+	queries := database.New(pool)
 	downloader := services.NewDownloaderService(queries)
 	videoHandler := handlers.NewVideoHandler(queries, downloader)
 	errorHandler := handlers.NewErrorHandler(queries)
+	ytdlpHandler := handlers.NewYtDlpHandler(queries, downloader)
 
 	r := chi.NewRouter()
 
@@ -37,7 +48,13 @@ func main() {
 
 	// Mount routes
 	r.Mount("/api/videos", routers.VideoRouter(videoHandler))
-	r.Mount("/api/system/errors", routers.ErrorRouter(errorHandler))
+	r.Mount("/api/errors", routers.ErrorRouter(errorHandler))
+	r.Mount("/api/yt-dlp", routers.YtDlpRouter(ytdlpHandler))
+
+	// Serve downloads folder
+	workDir, _ := os.Getwd()
+	filesDir := http.Dir(filepath.Join(workDir, "downloads"))
+	r.Handle("/downloads/*", http.StripPrefix("/downloads/", http.FileServer(filesDir)))
 
 	// Start server
 	addr := ":" + port

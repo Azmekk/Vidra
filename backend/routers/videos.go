@@ -14,7 +14,5 @@ func VideoRouter(h *handlers.VideoHandler) chi.Router {
 	r.Get("/{id}", h.GetVideo)
 	r.Get("/{id}/progress", h.GetProgress)
 	r.Delete("/{id}", h.DeleteVideo)
-	// System routes (could be in a separate router, but putting here for simplicity as requested)
-	r.Post("/update-ytdlp", h.UpdateYtdlp)
 	return r
 }

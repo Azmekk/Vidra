@@ -44,13 +44,13 @@ func mapErrorToResponse(e database.Error) ErrorResponse {
 // @Summary List recent errors
 // @Description Get a list of the most recent system errors
 // @ID listRecentErrors
-// @Tags system
+// @Tags errors
 // @Accept json
 // @Produce json
 // @Param limit query int false "Limit number of results" default(10)
 // @Success 200 {array} ErrorResponse
 // @Failure 500 {object} map[string]string
-// @Router /api/system/errors [get]
+// @Router /api/errors [get]
 func (h *ErrorHandler) ListRecentErrors(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	limit := int32(10)

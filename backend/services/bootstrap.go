@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
@@ -14,7 +15,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func Bootstrap(ctx context.Context) (*pgx.Conn, string) {
+func Bootstrap(ctx context.Context) (*pgxpool.Pool, string) {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment variables")
 	}
@@ -63,10 +64,10 @@ func Bootstrap(ctx context.Context) (*pgx.Conn, string) {
 	// Run migrations
 	runMigrations(dbUrl)
 
-	// Now connect to the target database with pgx
-	conn, err := pgx.Connect(ctx, dbUrl)
+	// Now connect to the target database with pgxpool
+	pool, err := pgxpool.New(ctx, dbUrl)
 	if err != nil {
-		log.Fatalf("Unable to connect to database with pgx: %v", err)
+		log.Fatalf("Unable to connect to database pool: %v", err)
 	}
 
 	port := os.Getenv("PORT")
@@ -74,7 +75,7 @@ func Bootstrap(ctx context.Context) (*pgx.Conn, string) {
 		port = "8080"
 	}
 
-	return conn, port
+	return pool, port
 }
 
 func runMigrations(dbUrl string) {
