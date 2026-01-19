@@ -248,7 +248,7 @@
       {@const prog = video.id ? getProgress(video.id) : undefined}
       {@const currentStatus = prog?.status || video.downloadStatus || "unknown"}
       {@const isProcessing = ["downloading", "encoding", "pending"].includes(
-        currentStatus.toLowerCase()
+        currentStatus.toLowerCase(),
       )}
       {@const isCompleted = currentStatus.toLowerCase() === "completed"}
       {@const isActive = activeVideoId === video.id}
@@ -393,6 +393,7 @@
                   size="icon"
                   href={`/downloads/${video.fileName}`}
                   download={video.fileName}
+                  disabled={video.downloadStatus !== "completed"}
                   class="h-11 w-11 rounded-2xl"
                 >
                   <Download class="h-5 w-5" />
@@ -473,7 +474,7 @@
                 <span
                   >Added {new Date(video.createdAt || "").toLocaleDateString(
                     undefined,
-                    { month: "short", day: "numeric", year: "numeric" }
+                    { month: "short", day: "numeric", year: "numeric" },
                   )}</span
                 >
               </div>
