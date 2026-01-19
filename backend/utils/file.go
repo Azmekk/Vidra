@@ -21,9 +21,6 @@ func SanitizeFilename(name string) string {
 	// Trim spaces and dots (problematic on Windows at end of name)
 	name = strings.TrimSpace(name)
 	name = strings.Trim(name, ".")
-
-	// Replace spaces with underscores
-	name = strings.ReplaceAll(name, " ", "_")
 	
 	// If empty or reserved name, use a default
 	if name == "" || reservedNames.MatchString(name) {
