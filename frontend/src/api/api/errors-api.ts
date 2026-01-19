@@ -29,13 +29,14 @@ import type { HandlersErrorResponse } from '../models';
 export const ErrorsApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * Get a list of the most recent system errors
+         * Get a list of the most recent system errors with optional searching
          * @summary List recent errors
+         * @param {string} [search] Search by error message or command
          * @param {number} [limit] Limit number of results
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listRecentErrors: async (limit?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listRecentErrors: async (search?: string, limit?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/api/errors`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -47,6 +48,10 @@ export const ErrorsApiAxiosParamCreator = function (configuration?: Configuratio
             const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
+
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
+            }
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
@@ -73,14 +78,15 @@ export const ErrorsApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = ErrorsApiAxiosParamCreator(configuration)
     return {
         /**
-         * Get a list of the most recent system errors
+         * Get a list of the most recent system errors with optional searching
          * @summary List recent errors
+         * @param {string} [search] Search by error message or command
          * @param {number} [limit] Limit number of results
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listRecentErrors(limit?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<HandlersErrorResponse>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listRecentErrors(limit, options);
+        async listRecentErrors(search?: string, limit?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<HandlersErrorResponse>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listRecentErrors(search, limit, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ErrorsApi.listRecentErrors']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -95,14 +101,15 @@ export const ErrorsApiFactory = function (configuration?: Configuration, basePat
     const localVarFp = ErrorsApiFp(configuration)
     return {
         /**
-         * Get a list of the most recent system errors
+         * Get a list of the most recent system errors with optional searching
          * @summary List recent errors
+         * @param {string} [search] Search by error message or command
          * @param {number} [limit] Limit number of results
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listRecentErrors(limit?: number, options?: RawAxiosRequestConfig): AxiosPromise<Array<HandlersErrorResponse>> {
-            return localVarFp.listRecentErrors(limit, options).then((request) => request(axios, basePath));
+        listRecentErrors(search?: string, limit?: number, options?: RawAxiosRequestConfig): AxiosPromise<Array<HandlersErrorResponse>> {
+            return localVarFp.listRecentErrors(search, limit, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -112,14 +119,15 @@ export const ErrorsApiFactory = function (configuration?: Configuration, basePat
  */
 export class ErrorsApi extends BaseAPI {
     /**
-     * Get a list of the most recent system errors
+     * Get a list of the most recent system errors with optional searching
      * @summary List recent errors
+     * @param {string} [search] Search by error message or command
      * @param {number} [limit] Limit number of results
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public listRecentErrors(limit?: number, options?: RawAxiosRequestConfig) {
-        return ErrorsApiFp(this.configuration).listRecentErrors(limit, options).then((request) => request(this.axios, this.basePath));
+    public listRecentErrors(search?: string, limit?: number, options?: RawAxiosRequestConfig) {
+        return ErrorsApiFp(this.configuration).listRecentErrors(search, limit, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

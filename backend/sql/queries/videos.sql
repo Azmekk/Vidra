@@ -12,7 +12,14 @@ WHERE id = $1 LIMIT 1;
 
 -- name: ListVideos :many
 SELECT * FROM videos
-ORDER BY created_at DESC;
+WHERE (name ILIKE '%' || sqlc.arg('search') || '%' OR original_url ILIKE '%' || sqlc.arg('search') || '%')
+ORDER BY 
+    CASE WHEN sqlc.arg('ordering') = 'name_asc' THEN name END ASC,
+    CASE WHEN sqlc.arg('ordering') = 'name_desc' THEN name END DESC,
+    CASE WHEN sqlc.arg('ordering') = 'created_at_asc' THEN created_at END ASC,
+    CASE WHEN sqlc.arg('ordering') = 'status_asc' THEN download_status END ASC,
+    CASE WHEN sqlc.arg('ordering') = 'status_desc' THEN download_status END DESC,
+    CASE WHEN sqlc.arg('ordering') = 'created_at_desc' OR sqlc.arg('ordering') = '' OR sqlc.arg('ordering') IS NULL THEN created_at END DESC;
 
 -- name: UpdateVideoStatus :one
 UPDATE videos
@@ -25,6 +32,13 @@ RETURNING *;
 UPDATE videos
   set file_name = $2,
   thumbnail_file_name = $3,
+  updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateVideoName :one
+UPDATE videos
+  set name = $2,
   updated_at = NOW()
 WHERE id = $1
 RETURNING *;

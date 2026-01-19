@@ -40,6 +40,10 @@ This project is a Go-based backend for a video downloading platform, utilizing `
 - **API Design:** 
     - Uses **DTOs** (Data Transfer Objects) for API responses to avoid exposing database-specific types (e.g., `pgtype.Text`).
     - Swagger operation IDs are in `camelCase`.
+- **Database Types:**
+    - For `pgtype.UUID`, prefer using the `.String()` method when a string representation is needed instead of manual scanning/conversion where possible.
+- **Tools:**
+    - Use `bun` instead of `npm` or `yarn` for any JavaScript-related scripts or tools if applicable.
 - **Background Tasks:** 
     - Video downloads are initiated in background goroutines.
     - Real-time progress (percentage, speed, ETA) is stored in a `sync.Map` and exposed via `/api/videos/{id}/progress`.

@@ -4,9 +4,11 @@
 	import type { HandlersVideoResponse, ServicesDownloadProgressDTO } from '$api/index';
 	import * as Card from "$lib/components/ui/card/index.js";
 	import * as Button from "$lib/components/ui/button/index.js";
+	import * as Select from "$lib/components/ui/select/index.js";
+	import { Input } from "$lib/components/ui/input/index.js";
 	import { Badge } from "$lib/components/ui/badge/index.js";
 	import { Progress } from "$lib/components/ui/progress/index.js";
-	import { Plus, Trash2, Play, ExternalLink, Clock, Download, HardDrive } from "@lucide/svelte";
+	import { Plus, Trash2, Play, ExternalLink, Clock, Download, HardDrive, Search, SortAsc, Copy, Check, Loader2, Pencil, X, Save } from "@lucide/svelte";
 
 	let { data } = $props();
 	let videos: HandlersVideoResponse[] = $state(data.videos || []);
@@ -14,13 +16,69 @@
 	let interval: any;
 	let listInterval: any;
 
-	async function fetchVideos() {
+	let search = $state("");
+	let debouncedSearch = $state("");
+	let order = $state("created_at_desc");
+	let isLoading = $state(false);
+
+	let editingId = $state<string | null>(null);
+	let editingName = $state("");
+
+	async function fetchVideos(query: string, sort: string) {
+		isLoading = true;
 		try {
-			const res = await videosApi.listVideos();
+			const res = await videosApi.listVideos(query, sort);
 			videos = res.data;
 		} catch (e) {
 			console.error('Error fetching videos', e);
+		} finally {
+			isLoading = false;
 		}
+	}
+
+	async function renameVideo(id: string) {
+		if (!editingName.trim()) return;
+		try {
+			await videosApi.updateVideo(id, { name: editingName });
+			editingId = null;
+			await fetchVideos(debouncedSearch, order);
+		} catch (e) {
+			console.error('Error renaming video', e);
+		}
+	}
+
+	function startEditing(video: HandlersVideoResponse) {
+		editingId = video.id!;
+		editingName = video.name!;
+	}
+
+	function cancelEditing() {
+		editingId = null;
+		editingName = "";
+	}
+
+	// Debounce search
+	$effect(() => {
+		const currentSearch = search;
+		const handler = setTimeout(() => {
+			debouncedSearch = currentSearch;
+		}, 300);
+
+		return () => clearTimeout(handler);
+	});
+
+	// Re-fetch when debouncedSearch or order changes
+	$effect(() => {
+		fetchVideos(debouncedSearch, order);
+	});
+
+	let copiedId = $state<string | null>(null);
+	function copyToClipboard(text: string, id: string) {
+		navigator.clipboard.writeText(text);
+		copiedId = id;
+		setTimeout(() => {
+			if (copiedId === id) copiedId = null;
+		}, 2000);
 	}
 
 	async function updateProgress() {
@@ -36,7 +94,7 @@
 		if (!confirm('Are you sure you want to delete this video?')) return;
 		try {
 			await videosApi.deleteVideo(id);
-			await fetchVideos();
+			await fetchVideos(debouncedSearch, order);
 		} catch (e) {
 			console.error('Error deleting video', e);
 		}
@@ -45,7 +103,7 @@
 	onMount(() => {
 		updateProgress();
 		interval = setInterval(updateProgress, 1000);
-		listInterval = setInterval(fetchVideos, 5000);
+		listInterval = setInterval(() => fetchVideos(debouncedSearch, order), 5000);
 
 		return () => {
 			clearInterval(interval);
@@ -88,6 +146,39 @@
 			<Plus class="mr-2 h-5 w-5 stroke-[3px]" />
 			Download New
 		</Button.Root>
+	</div>
+
+	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-6 rounded-[2rem] border shadow-sm">
+		<div class="relative flex-1 max-w-md">
+			<Search class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+			<Input
+				type="text"
+				placeholder="Search videos..."
+				bind:value={search}
+				class="h-12 rounded-xl pl-12 pr-12 bg-muted/50 border-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+			/>
+			{#if isLoading}
+				<div class="absolute right-4 top-1/2 -translate-y-1/2">
+					<Loader2 class="h-5 w-5 animate-spin text-primary" />
+				</div>
+			{/if}
+		</div>
+		<div class="flex items-center gap-3">
+			<SortAsc class="h-5 w-5 text-muted-foreground" />
+			<Select.Root type="single" bind:value={order}>
+				<Select.Trigger class="h-12 min-w-[180px] rounded-xl bg-muted/50 border-none font-bold">
+					{order.replace('_', ' ').toUpperCase()}
+				</Select.Trigger>
+				<Select.Content class="rounded-xl border shadow-xl">
+					<Select.Item value="created_at_desc">Latest First</Select.Item>
+					<Select.Item value="created_at_asc">Oldest First</Select.Item>
+					<Select.Item value="name_asc">Name A-Z</Select.Item>
+					<Select.Item value="name_desc">Name Z-A</Select.Item>
+					<Select.Item value="status_asc">Status A-Z</Select.Item>
+					<Select.Item value="status_desc">Status Z-A</Select.Item>
+				</Select.Content>
+			</Select.Root>
+		</div>
 	</div>
 
 	<div class="grid grid-cols-1 gap-8">
@@ -146,10 +237,51 @@
 				
 				<div class="flex flex-1 flex-col p-6 sm:p-8 min-w-0">
 					<div class="flex items-start justify-between gap-4">
-						<h3 class="text-xl font-bold leading-tight tracking-tight sm:text-2xl line-clamp-2" title={video.name}>
-							{video.name || 'Untitled Video'}
-						</h3>
+						<div class="space-y-1 min-w-0 flex-1">
+							{#if editingId === video.id}
+								<div class="flex items-center gap-2">
+									<Input
+										bind:value={editingName}
+										class="h-10 rounded-lg bg-muted/50 border-primary/20 focus-visible:ring-primary/20"
+										autofocus
+										onkeydown={(e) => {
+											if (e.key === 'Enter') renameVideo(video.id!);
+											if (e.key === 'Escape') cancelEditing();
+										}}
+									/>
+									<Button.Root variant="ghost" size="icon" onclick={() => renameVideo(video.id!)} class="h-10 w-10 shrink-0 text-green-600 hover:bg-green-500/10">
+										<Save class="h-5 w-5" />
+									</Button.Root>
+									<Button.Root variant="ghost" size="icon" onclick={cancelEditing} class="h-10 w-10 shrink-0 text-muted-foreground hover:bg-muted">
+										<X class="h-5 w-5" />
+									</Button.Root>
+								</div>
+							{:else}
+								<h3 class="text-xl font-bold leading-tight tracking-tight sm:text-2xl line-clamp-2" title={video.name}>
+									{video.name || 'Untitled Video'}
+								</h3>
+							{/if}
+							
+							{#if video.id}
+								<button 
+									onclick={() => copyToClipboard(video.id!, video.id!)}
+									class="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-primary transition-colors group/guid"
+								>
+									<span class="truncate max-w-[150px]">{video.id}</span>
+									{#if copiedId === video.id}
+										<Check class="h-3 w-3 text-green-500" />
+									{:else}
+										<Copy class="h-3 w-3 opacity-0 group-hover/guid:opacity-100" />
+									{/if}
+								</button>
+							{/if}
+						</div>
 						<div class="flex shrink-0 gap-2">
+							{#if editingId !== video.id}
+								<Button.Root variant="secondary" size="icon" onclick={() => startEditing(video)} class="h-11 w-11 rounded-2xl">
+									<Pencil class="h-5 w-5" />
+								</Button.Root>
+							{/if}
 							{#if isCompleted}
 								<Button.Root variant="secondary" size="icon" href={`/downloads/${video.fileName}`} download class="h-11 w-11 rounded-2xl">
 									<Download class="h-5 w-5" />
@@ -185,9 +317,11 @@
 											<span class="text-blue-600 dark:text-blue-500 uppercase tracking-wider text-xs">{prog?.speed || 'Downloading...'}</span>
 										{/if}
 									</span>
-									<span class="text-lg tabular-nums">{prog?.percent?.toFixed(0) || 0}%</span>
+									<span class="text-lg tabular-nums">
+										{(currentStatus.toLowerCase() === 'encoding' ? prog?.encodingPercent : prog?.percent)?.toFixed(0) || 0}%
+									</span>
 								</div>
-								<Progress value={prog?.percent || 0} class="h-3 rounded-full" />
+								<Progress value={(currentStatus.toLowerCase() === 'encoding' ? prog?.encodingPercent : prog?.percent) || 0} class="h-3 rounded-full" />
 								{#if prog?.eta}
 									<p class="text-right text-xs font-medium text-muted-foreground">ETA: {prog.eta}</p>
 								{/if}

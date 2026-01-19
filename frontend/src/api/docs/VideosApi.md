@@ -11,6 +11,7 @@ All URIs are relative to *http://localhost*
 |[**getVideo**](#getvideo) | **GET** /api/videos/{id} | Get a video by ID|
 |[**listAllProgress**](#listallprogress) | **GET** /api/videos/progress | List all video download progress|
 |[**listVideos**](#listvideos) | **GET** /api/videos | List all videos|
+|[**updateVideo**](#updatevideo) | **PUT** /api/videos/{id} | Update a video|
 
 # **createVideo**
 > HandlersVideoResponse createVideo(video)
@@ -325,7 +326,7 @@ No authorization required
 # **listVideos**
 > Array<HandlersVideoResponse> listVideos()
 
-Get a list of all videos
+Get a list of all videos with optional searching and ordering
 
 ### Example
 
@@ -338,11 +339,21 @@ import {
 const configuration = new Configuration();
 const apiInstance = new VideosApi(configuration);
 
-const { status, data } = await apiInstance.listVideos();
+let search: string; //Search by name or URL (optional) (default to undefined)
+let order: string; //Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc) (optional) (default to undefined)
+
+const { status, data } = await apiInstance.listVideos(
+    search,
+    order
+);
 ```
 
 ### Parameters
-This endpoint does not have any parameters.
+
+|Name | Type | Description  | Notes|
+|------------- | ------------- | ------------- | -------------|
+| **search** | [**string**] | Search by name or URL | (optional) defaults to undefined|
+| **order** | [**string**] | Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc) | (optional) defaults to undefined|
 
 
 ### Return type
@@ -363,6 +374,64 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 |**200** | OK |  -  |
+|**500** | Internal Server Error |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **updateVideo**
+> HandlersVideoResponse updateVideo(video)
+
+Update video details like name
+
+### Example
+
+```typescript
+import {
+    VideosApi,
+    Configuration,
+    HandlersUpdateVideoRequest
+} from './api';
+
+const configuration = new Configuration();
+const apiInstance = new VideosApi(configuration);
+
+let id: string; //Video ID (default to undefined)
+let video: HandlersUpdateVideoRequest; //Updated video details
+
+const { status, data } = await apiInstance.updateVideo(
+    id,
+    video
+);
+```
+
+### Parameters
+
+|Name | Type | Description  | Notes|
+|------------- | ------------- | ------------- | -------------|
+| **video** | **HandlersUpdateVideoRequest**| Updated video details | |
+| **id** | [**string**] | Video ID | defaults to undefined|
+
+
+### Return type
+
+**HandlersVideoResponse**
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+|**200** | OK |  -  |
+|**400** | Bad Request |  -  |
+|**404** | Not Found |  -  |
 |**500** | Internal Server Error |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

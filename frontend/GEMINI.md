@@ -46,6 +46,8 @@ If the backend API changes, regenerate the client:
 
 ## 📝 Development Conventions
 
+- **Tooling:** Always use `bun` for package management and running scripts. Avoid `npm` or `yarn`.
+- **Backend Types:** When working with backend-provided UUIDs (from `pgx/v5`), prefer using the `.String()` method for `pgtype.UUID` if a string is needed instead of manual scanning.
 - **Svelte 5 Runes:** Use `$state`, `$derived`, and `$props` instead of Svelte 4's `let`, `$:`, and `export let`.
 - **API Communication:** Use the exported API instances from `$lib/api-client`.
 - **Styling:** Use Tailwind CSS 4 utility classes.

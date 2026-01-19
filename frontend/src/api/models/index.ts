@@ -1,6 +1,7 @@
 export * from './handlers-create-video-request';
 export * from './handlers-error-response';
 export * from './handlers-metadata-request';
+export * from './handlers-update-video-request';
 export * from './handlers-video-response';
 export * from './services-download-progress-dto';
 export * from './services-download-status';

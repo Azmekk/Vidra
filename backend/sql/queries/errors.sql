@@ -8,5 +8,8 @@ RETURNING *;
 
 -- name: ListRecentErrors :many
 SELECT * FROM errors
+WHERE (error_message ILIKE '%' || sqlc.arg('search') || '%' 
+   OR command ILIKE '%' || sqlc.arg('search') || '%'
+   OR CAST(video_id AS TEXT) ILIKE '%' || sqlc.arg('search') || '%')
 ORDER BY created_at DESC
-LIMIT $1;
+LIMIT sqlc.arg('limit_val');

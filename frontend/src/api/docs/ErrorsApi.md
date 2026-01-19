@@ -9,7 +9,7 @@ All URIs are relative to *http://localhost*
 # **listRecentErrors**
 > Array<HandlersErrorResponse> listRecentErrors()
 
-Get a list of the most recent system errors
+Get a list of the most recent system errors with optional searching
 
 ### Example
 
@@ -22,9 +22,11 @@ import {
 const configuration = new Configuration();
 const apiInstance = new ErrorsApi(configuration);
 
+let search: string; //Search by error message or command (optional) (default to undefined)
 let limit: number; //Limit number of results (optional) (default to 10)
 
 const { status, data } = await apiInstance.listRecentErrors(
+    search,
     limit
 );
 ```
@@ -33,6 +35,7 @@ const { status, data } = await apiInstance.listRecentErrors(
 
 |Name | Type | Description  | Notes|
 |------------- | ------------- | ------------- | -------------|
+| **search** | [**string**] | Search by error message or command | (optional) defaults to undefined|
 | **limit** | [**number**] | Limit number of results | (optional) defaults to 10|
 
 

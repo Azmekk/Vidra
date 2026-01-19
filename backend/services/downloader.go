@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
+	"github.com/Azmekk/Vidra/backend/utils"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -121,6 +122,23 @@ func (s *DownloaderService) GetAllProgress() map[string]DownloadProgressDTO {
 	return allProgress
 }
 
+func (s *DownloaderService) DeleteVideoFiles(fileName, thumbnailFileName string) {
+	if fileName != "" {
+		path := filepath.Join("downloads", fileName)
+		log.Printf("INFO: Deleting video file: %s\n", path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Printf("WARN: Failed to delete video file %s: %v\n", path, err)
+		}
+	}
+	if thumbnailFileName != "" {
+		path := filepath.Join("downloads", thumbnailFileName)
+		log.Printf("INFO: Deleting thumbnail file: %s\n", path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Printf("WARN: Failed to delete thumbnail file %s: %v\n", path, err)
+		}
+	}
+}
+
 func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "yt-dlp", "-U")
 	output, err := cmd.CombinedOutput()
@@ -129,9 +147,11 @@ func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
 
 func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
 	cmd := exec.CommandContext(ctx, "yt-dlp", "--dump-json", "--flat-playlist", url)
-	output, err := cmd.Output()
+	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get metadata: %w", err)
+		log.Printf("ERROR: yt-dlp metadata failed: %v, output: %s\n", err, string(output))
+		return nil, fmt.Errorf("failed to get metadata: %w (output: %s)", err, string(output))
 	}
 
 	var raw map[string]interface{}
@@ -166,8 +186,9 @@ func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*
 
 func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string) {
 	idStr := id.String()
+	finalBaseName = utils.SanitizeFilename(finalBaseName)
 
-	log.Printf("INFO [%s]: Initializing download task for URL: %s\n", idStr, url)
+	log.Printf("INFO [%s]: Initializing download task for URL: %s (final name: %s)\n", idStr, url, finalBaseName)
 
 	prog := &DownloadProgress{Status: StatusPending}
 	s.progress.Store(idStr, prog)
@@ -186,6 +207,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		prog.Update(0, 0, "", "", StatusDownloading, "Starting download...")
 
 		cmd := exec.Command("yt-dlp", "-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline", url)
+		log.Printf("DEBUG [%s]: Executing command: %s\n", idStr, cmd.String())
 		var fullOutput bytes.Buffer
 
 		stdout, err := cmd.StdoutPipe()
@@ -268,8 +290,34 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			})
 			return
 		}
-		tempFile := files[0]
-		log.Printf("INFO [%s]: Found temporary file: %s\n", idStr, tempFile)
+		var tempFile string
+		for _, f := range files {
+			ext := strings.ToLower(filepath.Ext(f))
+			// Skip thumbnails and temporary files
+			if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" || ext == ".part" || ext == ".ytdl" {
+				continue
+			}
+			tempFile = f
+			break
+		}
+
+		if tempFile == "" {
+			msg := "Downloaded video file not found in downloads directory (only found thumbnails)"
+			log.Printf("ERROR [%s]: %s\n", idStr, msg)
+			prog.Update(100, 0, "", "", StatusError, msg)
+			s.queries.CreateError(context.Background(), database.CreateErrorParams{
+				VideoID:      id,
+				ErrorMessage: msg,
+				Command:      "file-glob-check",
+				Output:       "",
+			})
+			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+				ID:             id,
+				DownloadStatus: string(StatusError),
+			})
+			return
+		}
+		log.Printf("INFO [%s]: Found temporary video file: %s\n", idStr, tempFile)
 
 		// 3. Encode to H264 and rename
 		finalFileName := finalBaseName + ".mp4"
@@ -359,9 +407,17 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			finalThumbnailName = ""
 		}
 
-		// 5. Cleanup temp file
-		if err := os.Remove(tempFile); err != nil {
-			log.Printf("WARN [%s]: Failed to remove temporary file: %v\n", idStr, err)
+		// 5. Cleanup all remaining temporary files for this ID
+		log.Printf("INFO [%s]: Cleaning up temporary files matching %s.*\n", idStr, idStr)
+		remainingFiles, _ := filepath.Glob(filepath.Join("downloads", idStr+".*"))
+		for _, f := range remainingFiles {
+			if err := os.Remove(f); err != nil {
+				if !os.IsNotExist(err) {
+					log.Printf("WARN [%s]: Failed to remove temporary file %s: %v\n", idStr, f, err)
+				}
+			} else {
+				log.Printf("INFO [%s]: Removed temporary file: %s\n", idStr, f)
+			}
 		}
 
 		// 6. Update database

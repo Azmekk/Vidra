@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
@@ -129,6 +131,12 @@ func mapVideoToResponse(v database.Video) VideoResponse {
 // @Failure 500 {object} map[string]string
 // @Router /api/videos [post]
 func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
+	// Read body for logging
+	bodyBytes, _ := io.ReadAll(r.Body)
+	log.Printf("DEBUG: CreateVideo raw body: %s\n", string(bodyBytes))
+	// Restore body for json decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	var req CreateVideoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("ERROR: Failed to decode CreateVideo request: %v\n", err)
@@ -136,7 +144,10 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("DEBUG: CreateVideo parsed request: %+v\n", req)
+
 	if err := req.Validate(); err != nil {
+		log.Printf("ERROR: CreateVideo validation failed: %v\n", err)
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -160,8 +171,7 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var idStr string
-	video.ID.Scan(&idStr)
+	idStr := video.ID.String()
 	log.Printf("INFO: Successfully created video record in database: ID=%s\n", idStr)
 
 	// Start background download
@@ -242,16 +252,24 @@ func (h *VideoHandler) GetVideo(w http.ResponseWriter, r *http.Request) {
 
 // ListVideos godoc
 // @Summary List all videos
-// @Description Get a list of all videos
+// @Description Get a list of all videos with optional searching and ordering
 // @ID listVideos
 // @Tags videos
 // @Accept json
 // @Produce json
+// @Param search query string false "Search by name or URL"
+// @Param order query string false "Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)"
 // @Success 200 {array} VideoResponse
 // @Failure 500 {object} map[string]string
 // @Router /api/videos [get]
 func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
-	videos, err := h.Queries.ListVideos(r.Context())
+	search := r.URL.Query().Get("search")
+	order := r.URL.Query().Get("order")
+
+	videos, err := h.Queries.ListVideos(r.Context(), database.ListVideosParams{
+		Search:   pgtype.Text{String: search, Valid: true},
+		Ordering: pgtype.Text{String: order, Valid: true},
+	})
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -265,9 +283,65 @@ func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusOK, responses)
 }
 
+type UpdateVideoRequest struct {
+	Name string `json:"name"`
+}
+
+func (r *UpdateVideoRequest) Validate() error {
+	if r.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// UpdateVideo godoc
+// @Summary Update a video
+// @Description Update video details like name
+// @ID updateVideo
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID"
+// @Param video body UpdateVideoRequest true "Updated video details"
+// @Success 200 {object} VideoResponse
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/videos/{id} [put]
+func (h *VideoHandler) UpdateVideo(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	var id pgtype.UUID
+	if err := id.Scan(idStr); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid video ID")
+		return
+	}
+
+	var req UpdateVideoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	video, err := h.Queries.UpdateVideoName(r.Context(), database.UpdateVideoNameParams{
+		ID:   id,
+		Name: req.Name,
+	})
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
+}
+
 // DeleteVideo godoc
 // @Summary Delete a video
-// @Description Delete a video record by ID
+// @Description Delete a video record by ID and its associated files
 // @ID deleteVideo
 // @Tags videos
 // @Accept json
@@ -275,6 +349,7 @@ func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Video ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/videos/{id} [delete]
 func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
@@ -285,11 +360,22 @@ func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.Queries.DeleteVideo(r.Context(), id)
+	// Fetch video details to get filenames for cleanup
+	video, err := h.Queries.GetVideo(r.Context(), id)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Video not found")
+		return
+	}
+
+	// Delete from database first
+	err = h.Queries.DeleteVideo(r.Context(), id)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// Delete files from filesystem
+	h.Downloader.DeleteVideoFiles(video.FileName.String, video.ThumbnailFileName.String)
 
 	w.WriteHeader(http.StatusNoContent)
 }

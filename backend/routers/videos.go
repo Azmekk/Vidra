@@ -12,6 +12,7 @@ func VideoRouter(h *handlers.VideoHandler) chi.Router {
 	r.Post("/metadata", h.GetMetadata)
 	r.Get("/progress", h.ListAllProgress)
 	r.Get("/{id}", h.GetVideo)
+	r.Put("/{id}", h.UpdateVideo)
 	r.Get("/{id}/progress", h.GetProgress)
 	r.Delete("/{id}", h.DeleteVideo)
 	return r

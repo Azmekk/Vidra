@@ -26,6 +26,8 @@ import type { HandlersCreateVideoRequest } from '../models';
 // @ts-ignore
 import type { HandlersMetadataRequest } from '../models';
 // @ts-ignore
+import type { HandlersUpdateVideoRequest } from '../models';
+// @ts-ignore
 import type { HandlersVideoResponse } from '../models';
 // @ts-ignore
 import type { ServicesDownloadProgressDTO } from '../models';
@@ -239,12 +241,14 @@ export const VideosApiAxiosParamCreator = function (configuration?: Configuratio
             };
         },
         /**
-         * Get a list of all videos
+         * Get a list of all videos with optional searching and ordering
          * @summary List all videos
+         * @param {string} [search] Search by name or URL
+         * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listVideos: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listVideos: async (search?: string, order?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/api/videos`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -257,11 +261,58 @@ export const VideosApiAxiosParamCreator = function (configuration?: Configuratio
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
+            }
+
+            if (order !== undefined) {
+                localVarQueryParameter['order'] = order;
+            }
+
             localVarHeaderParameter['Accept'] = 'application/json';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Update video details like name
+         * @summary Update a video
+         * @param {string} id Video ID
+         * @param {HandlersUpdateVideoRequest} video Updated video details
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        updateVideo: async (id: string, video: HandlersUpdateVideoRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('updateVideo', 'id', id)
+            // verify required parameter 'video' is not null or undefined
+            assertParamExists('updateVideo', 'video', video)
+            const localVarPath = `/api/videos/{id}`
+                .replace(`{${"id"}}`, encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(video, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -355,15 +406,31 @@ export const VideosApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Get a list of all videos
+         * Get a list of all videos with optional searching and ordering
          * @summary List all videos
+         * @param {string} [search] Search by name or URL
+         * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listVideos(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<HandlersVideoResponse>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listVideos(options);
+        async listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<HandlersVideoResponse>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listVideos(search, order, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['VideosApi.listVideos']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Update video details like name
+         * @summary Update a video
+         * @param {string} id Video ID
+         * @param {HandlersUpdateVideoRequest} video Updated video details
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async updateVideo(id: string, video: HandlersUpdateVideoRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HandlersVideoResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.updateVideo(id, video, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['VideosApi.updateVideo']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -435,13 +502,26 @@ export const VideosApiFactory = function (configuration?: Configuration, basePat
             return localVarFp.listAllProgress(options).then((request) => request(axios, basePath));
         },
         /**
-         * Get a list of all videos
+         * Get a list of all videos with optional searching and ordering
          * @summary List all videos
+         * @param {string} [search] Search by name or URL
+         * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listVideos(options?: RawAxiosRequestConfig): AxiosPromise<Array<HandlersVideoResponse>> {
-            return localVarFp.listVideos(options).then((request) => request(axios, basePath));
+        listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig): AxiosPromise<Array<HandlersVideoResponse>> {
+            return localVarFp.listVideos(search, order, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Update video details like name
+         * @summary Update a video
+         * @param {string} id Video ID
+         * @param {HandlersUpdateVideoRequest} video Updated video details
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        updateVideo(id: string, video: HandlersUpdateVideoRequest, options?: RawAxiosRequestConfig): AxiosPromise<HandlersVideoResponse> {
+            return localVarFp.updateVideo(id, video, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -516,13 +596,27 @@ export class VideosApi extends BaseAPI {
     }
 
     /**
-     * Get a list of all videos
+     * Get a list of all videos with optional searching and ordering
      * @summary List all videos
+     * @param {string} [search] Search by name or URL
+     * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public listVideos(options?: RawAxiosRequestConfig) {
-        return VideosApiFp(this.configuration).listVideos(options).then((request) => request(this.axios, this.basePath));
+    public listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig) {
+        return VideosApiFp(this.configuration).listVideos(search, order, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Update video details like name
+     * @summary Update a video
+     * @param {string} id Video ID
+     * @param {HandlersUpdateVideoRequest} video Updated video details
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public updateVideo(id: string, video: HandlersUpdateVideoRequest, options?: RawAxiosRequestConfig) {
+        return VideosApiFp(this.configuration).updateVideo(id, video, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

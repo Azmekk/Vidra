@@ -3,7 +3,7 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async () => {
 	try {
-		const response = await videosApi.listVideos();
+		const response = await videosApi.listVideos("", "");
 		return {
 			videos: response.data
 		};

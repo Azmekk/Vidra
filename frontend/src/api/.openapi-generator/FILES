@@ -1,6 +1,5 @@
 .gitignore
 .npmignore
-.openapi-generator-ignore
 api.ts
 api/errors-api.ts
 api/videos-api.ts
@@ -12,6 +11,7 @@ docs/ErrorsApi.md
 docs/HandlersCreateVideoRequest.md
 docs/HandlersErrorResponse.md
 docs/HandlersMetadataRequest.md
+docs/HandlersUpdateVideoRequest.md
 docs/HandlersVideoResponse.md
 docs/ServicesDownloadProgressDTO.md
 docs/ServicesDownloadStatus.md
@@ -24,6 +24,7 @@ index.ts
 models/handlers-create-video-request.ts
 models/handlers-error-response.ts
 models/handlers-metadata-request.ts
+models/handlers-update-video-request.ts
 models/handlers-video-response.ts
 models/index.ts
 models/services-download-progress-dto.ts

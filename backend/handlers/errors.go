@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ErrorHandler struct {
@@ -26,13 +27,10 @@ type ErrorResponse struct {
 }
 
 func mapErrorToResponse(e database.Error) ErrorResponse {
-	var idStr, videoIdStr string
-	e.ID.Scan(&idStr)
-	e.VideoID.Scan(&videoIdStr)
 
 	return ErrorResponse{
-		ID:           idStr,
-		VideoID:      videoIdStr,
+		ID:           e.ID.String(),
+		VideoID:      e.VideoID.String(),
 		ErrorMessage: e.ErrorMessage,
 		Command:      e.Command,
 		Output:       e.Output,
@@ -42,16 +40,18 @@ func mapErrorToResponse(e database.Error) ErrorResponse {
 
 // ListRecentErrors godoc
 // @Summary List recent errors
-// @Description Get a list of the most recent system errors
+// @Description Get a list of the most recent system errors with optional searching
 // @ID listRecentErrors
 // @Tags errors
 // @Accept json
 // @Produce json
+// @Param search query string false "Search by error message or command"
 // @Param limit query int false "Limit number of results" default(10)
 // @Success 200 {array} ErrorResponse
 // @Failure 500 {object} map[string]string
 // @Router /api/errors [get]
 func (h *ErrorHandler) ListRecentErrors(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("search")
 	limitStr := r.URL.Query().Get("limit")
 	limit := int32(10)
 	if limitStr != "" {
@@ -60,7 +60,10 @@ func (h *ErrorHandler) ListRecentErrors(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	errors, err := h.Queries.ListRecentErrors(r.Context(), limit)
+	errors, err := h.Queries.ListRecentErrors(r.Context(), database.ListRecentErrorsParams{
+		Search:   pgtype.Text{String: search, Valid: true},
+		LimitVal: limit,
+	})
 	if err != nil {
 		h.respondWithError(w, http.StatusInternalServerError, err.Error())
 		return

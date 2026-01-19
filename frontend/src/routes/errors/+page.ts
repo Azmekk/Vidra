@@ -3,7 +3,7 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async () => {
 	try {
-		const response = await errorsApi.listRecentErrors(50); // Fetch last 50
+		const response = await errorsApi.listRecentErrors("", 50); // Fetch last 50
 		return {
 			errors: response.data
 		};
