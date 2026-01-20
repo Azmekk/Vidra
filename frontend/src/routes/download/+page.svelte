@@ -24,6 +24,7 @@
     X,
   } from "@lucide/svelte";
   import { Separator } from "$lib/components/ui/separator/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
 
   let url = $state("");
   let customName = $state("");
@@ -557,16 +558,7 @@
                     Ensures compatibility but takes longer
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onclick={() => reEncode = !reEncode}
-                  class="relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 {reEncode ? 'bg-primary' : 'bg-muted'}"
-                  aria-label="Toggle re-encoding"
-                >
-                  <span
-                    class="pointer-events-none block h-6 w-6 rounded-full bg-background shadow-lg ring-0 transition-transform {reEncode ? 'translate-x-6' : 'translate-x-0'}"
-                  ></span>
-                </button>
+                <Switch bind:checked={reEncode} aria-label="Toggle re-encoding" />
               </div>
   	        </div>
 
