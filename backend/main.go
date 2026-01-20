@@ -75,4 +75,6 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("❌ Server failed to start: %v", err)
 	}
+
+	//TODO: Remove this comment
 }
