@@ -12,4 +12,10 @@ WHERE (error_message ILIKE '%' || sqlc.arg('search') || '%'
    OR command ILIKE '%' || sqlc.arg('search') || '%'
    OR CAST(video_id AS TEXT) ILIKE '%' || sqlc.arg('search') || '%')
 ORDER BY created_at DESC
-LIMIT sqlc.arg('limit_val');
+LIMIT $1 OFFSET $2;
+
+-- name: CountErrors :one
+SELECT COUNT(*) FROM errors
+WHERE (error_message ILIKE '%' || sqlc.arg('search') || '%' 
+   OR command ILIKE '%' || sqlc.arg('search') || '%'
+   OR CAST(video_id AS TEXT) ILIKE '%' || sqlc.arg('search') || '%');

@@ -8,6 +8,7 @@
   import * as Card from "$lib/components/ui/card/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
   import * as Select from "$lib/components/ui/select/index.js";
+  import * as Pagination from "$lib/components/ui/pagination/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Progress } from "$lib/components/ui/progress/index.js";
@@ -27,10 +28,17 @@
     Pencil,
     X,
     Save,
+    ChevronLeft,
+    ChevronRight,
   } from "@lucide/svelte";
 
   let { data } = $props();
-  let videos: HandlersVideoResponse[] = $state(data.videos || []);
+  let videos: HandlersVideoResponse[] = $state(data.paginatedVideos.videos || []);
+  let totalCount = $state(data.paginatedVideos.totalCount || 0);
+  let totalPages = $state(data.paginatedVideos.totalPages || 0);
+  let currentPage = $state(data.paginatedVideos.currentPage || 1);
+  let limit = $state(data.paginatedVideos.limit || 10);
+
   let progressMap: Record<string, ServicesDownloadProgressDTO> = $state({});
   let ws: WebSocket;
 
@@ -73,9 +81,24 @@
           })();
         }
       } else if (data.type === "video_created") {
-        videos = [data.payload, ...videos];
+        // If we are on the first page and sorted by latest, we can add it
+        if (currentPage === 1 && order === "created_at_desc") {
+          videos = [data.payload, ...videos.slice(0, limit - 1)];
+          totalCount++;
+          totalPages = Math.ceil(totalCount / limit);
+        } else {
+           // Otherwise just update count
+           totalCount++;
+           totalPages = Math.ceil(totalCount / limit);
+        }
       } else if (data.type === "video_deleted") {
-        videos = videos.filter((v) => v.id !== data.payload.id);
+        const videoExists = videos.some((v) => v.id === data.payload.id);
+        if (videoExists) {
+          fetchVideos(debouncedSearch, order, currentPage);
+        } else {
+          totalCount--;
+          totalPages = Math.ceil(totalCount / limit);
+        }
         delete progressMap[data.payload.id];
       }
     };
@@ -91,11 +114,14 @@
     };
   }
 
-  async function fetchVideos(query: string, sort: string) {
+  async function fetchVideos(query: string, sort: string, page: number) {
     isLoading = true;
     try {
-      const res = await videosApi.listVideos(query, sort);
-      videos = res.data;
+      const res = await videosApi.listVideos(query, sort, page, limit);
+      videos = res.data.videos || [];
+      totalCount = res.data.totalCount || 0;
+      totalPages = res.data.totalPages || 0;
+      currentPage = res.data.currentPage || 1;
     } catch (e) {
       console.error("Error fetching videos", e);
     } finally {
@@ -108,7 +134,7 @@
     try {
       await videosApi.updateVideo(id, { name: editingName });
       editingId = null;
-      await fetchVideos(debouncedSearch, order);
+      await fetchVideos(debouncedSearch, order, currentPage);
     } catch (e) {
       console.error("Error renaming video", e);
     }
@@ -129,14 +155,15 @@
     const currentSearch = search;
     const handler = setTimeout(() => {
       debouncedSearch = currentSearch;
+      currentPage = 1; // Reset to page 1 on search
     }, 300);
 
     return () => clearTimeout(handler);
   });
 
-  // Re-fetch when debouncedSearch or order changes
+  // Re-fetch when debouncedSearch, order, or currentPage changes
   $effect(() => {
-    fetchVideos(debouncedSearch, order);
+    fetchVideos(debouncedSearch, order, currentPage);
   });
 
   let copiedId = $state<string | null>(null);
@@ -152,7 +179,7 @@
     if (!confirm("Are you sure you want to delete this video?")) return;
     try {
       await videosApi.deleteVideo(id);
-      // No need to manually refresh or filter, WebSocket will handle video_deleted event
+      // WebSocket will handle video_deleted event
     } catch (e) {
       console.error("Error deleting video", e);
     }
@@ -203,7 +230,7 @@
     <div>
       <h1 class="text-4xl font-extrabold tracking-tight">Library</h1>
       <p class="mt-1 text-lg text-muted-foreground font-medium">
-        Your downloaded collection.
+        Your downloaded collection ({totalCount} videos).
       </p>
     </div>
     <Button.Root
@@ -237,7 +264,7 @@
     </div>
     <div class="flex items-center gap-3">
       <SortAsc class="h-5 w-5 text-muted-foreground" />
-      <Select.Root type="single" bind:value={order}>
+      <Select.Root type="single" bind:value={order} onValueChange={() => currentPage = 1}>
         <Select.Trigger
           class="h-12 min-w-[180px] rounded-xl bg-muted/50 border-none font-bold"
         >
@@ -496,6 +523,42 @@
       </div>
     {/each}
   </div>
+
+  {#if totalPages > 1}
+    <div class="flex justify-center mt-12 pb-12">
+      <Pagination.Root count={totalCount} perPage={limit} bind:page={currentPage}>
+        {#snippet children({ pages })}
+          <Pagination.Content>
+            <Pagination.Item>
+              <Pagination.PrevButton onclick={() => fetchVideos(debouncedSearch, order, currentPage - 1)}>
+                <ChevronLeft class="h-4 w-4" />
+                <span class="hidden sm:inline">Previous</span>
+              </Pagination.PrevButton>
+            </Pagination.Item>
+            {#each pages as page (page.key)}
+              {#if page.type === "ellipsis"}
+                <Pagination.Item>
+                  <Pagination.Ellipsis />
+                </Pagination.Item>
+              {:else}
+                <Pagination.Item>
+                  <Pagination.Link {page} isActive={currentPage === page.value} onclick={() => fetchVideos(debouncedSearch, order, page.value)}>
+                    {page.value}
+                  </Pagination.Link>
+                </Pagination.Item>
+              {/if}
+            {/each}
+            <Pagination.Item>
+              <Pagination.NextButton onclick={() => fetchVideos(debouncedSearch, order, currentPage + 1)}>
+                <span class="hidden sm:inline">Next</span>
+                <ChevronRight class="h-4 w-4" />
+              </Pagination.NextButton>
+            </Pagination.Item>
+          </Pagination.Content>
+        {/snippet}
+      </Pagination.Root>
+    </div>
+  {/if}
 
   {#if videos.length === 0}
     <div

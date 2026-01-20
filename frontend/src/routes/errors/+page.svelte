@@ -2,6 +2,7 @@
   import { invalidateAll } from "$app/navigation";
   import * as Card from "$lib/components/ui/card/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
+  import * as Pagination from "$lib/components/ui/pagination/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
@@ -17,21 +18,30 @@
     Loader2,
     Copy,
     Check,
+    ChevronLeft,
+    ChevronRight,
   } from "@lucide/svelte";
 
   let { data } = $props();
-  let errors = $state(data.errors || []);
+  let errors = $state(data.paginatedErrors.errors || []);
+  let totalCount = $state(data.paginatedErrors.totalCount || 0);
+  let totalPages = $state(data.paginatedErrors.totalPages || 0);
+  let currentPage = $state(data.paginatedErrors.currentPage || 1);
+  let limit = $state(data.paginatedErrors.limit || 10);
+
   let search = $state("");
   let debouncedSearch = $state("");
   let expandedId = $state<string | null>(null);
   let isLoading = $state(false);
 
-  async function fetchErrors(query: string) {
-    console.log('Fetching errors with query:', query);
+  async function fetchErrors(query: string, page: number) {
     isLoading = true;
     try {
-      const res = await errorsApi.listRecentErrors(query, 50);
-      errors = res.data;
+      const res = await errorsApi.listRecentErrors(query, page, limit);
+      errors = res.data.errors || [];
+      totalCount = res.data.totalCount || 0;
+      totalPages = res.data.totalPages || 0;
+      currentPage = res.data.currentPage || 1;
     } catch (e) {
       console.error("Error fetching errors", e);
     } finally {
@@ -43,13 +53,14 @@
     const currentSearch = search;
     const handler = setTimeout(() => {
       debouncedSearch = currentSearch;
+      currentPage = 1;
     }, 300);
 
     return () => clearTimeout(handler);
   });
 
   $effect(() => {
-    fetchErrors(debouncedSearch);
+    fetchErrors(debouncedSearch, currentPage);
   });
 
   let copiedId = $state<string | null>(null);
@@ -62,7 +73,7 @@
   }
 
   function refresh() {
-    fetchErrors(debouncedSearch);
+    fetchErrors(debouncedSearch, currentPage);
   }
 
   function formatDate(dateStr?: string) {
@@ -265,5 +276,41 @@
         </div>
       {/each}
     </div>
+
+    {#if totalPages > 1}
+      <div class="flex justify-center mt-12 pb-12">
+        <Pagination.Root count={totalCount} perPage={limit} bind:page={currentPage}>
+          {#snippet children({ pages })}
+            <Pagination.Content>
+              <Pagination.Item>
+                <Pagination.PrevButton onclick={() => fetchErrors(debouncedSearch, currentPage - 1)}>
+                  <ChevronLeft class="h-4 w-4" />
+                  <span class="hidden sm:inline">Previous</span>
+                </Pagination.PrevButton>
+              </Pagination.Item>
+              {#each pages as page (page.key)}
+                {#if page.type === "ellipsis"}
+                  <Pagination.Item>
+                    <Pagination.Ellipsis />
+                  </Pagination.Item>
+                {:else}
+                  <Pagination.Item>
+                    <Pagination.Link {page} isActive={currentPage === page.value} onclick={() => fetchErrors(debouncedSearch, page.value)}>
+                      {page.value}
+                    </Pagination.Link>
+                  </Pagination.Item>
+                {/if}
+              {/each}
+              <Pagination.Item>
+                <Pagination.NextButton onclick={() => fetchErrors(debouncedSearch, currentPage + 1)}>
+                  <span class="hidden sm:inline">Next</span>
+                  <ChevronRight class="h-4 w-4" />
+                </Pagination.NextButton>
+              </Pagination.Item>
+            </Pagination.Content>
+          {/snippet}
+        </Pagination.Root>
+      </div>
+    {/if}
   {/if}
 </div>

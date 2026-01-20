@@ -11,6 +11,8 @@ docs/ErrorsApi.md
 docs/HandlersCreateVideoRequest.md
 docs/HandlersErrorResponse.md
 docs/HandlersMetadataRequest.md
+docs/HandlersPaginatedErrorResponse.md
+docs/HandlersPaginatedVideoResponse.md
 docs/HandlersUpdateVideoRequest.md
 docs/HandlersVideoResponse.md
 docs/ServicesDownloadProgressDTO.md
@@ -24,6 +26,8 @@ index.ts
 models/handlers-create-video-request.ts
 models/handlers-error-response.ts
 models/handlers-metadata-request.ts
+models/handlers-paginated-error-response.ts
+models/handlers-paginated-video-response.ts
 models/handlers-update-video-request.ts
 models/handlers-video-response.ts
 models/index.ts

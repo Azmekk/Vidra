@@ -3,14 +3,20 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async () => {
 	try {
-		const response = await errorsApi.listRecentErrors("", 50); // Fetch last 50
+		const response = await errorsApi.listRecentErrors("", 1, 10);
 		return {
-			errors: response.data
+			paginatedErrors: response.data
 		};
 	} catch (e) {
 		console.error('Failed to load errors', e);
 		return {
-			errors: []
+			paginatedErrors: {
+				errors: [],
+				totalCount: 0,
+				totalPages: 0,
+				currentPage: 1,
+				limit: 10
+			}
 		};
 	}
 };

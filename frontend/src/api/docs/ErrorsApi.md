@@ -7,9 +7,9 @@ All URIs are relative to *http://localhost*
 |[**listRecentErrors**](#listrecenterrors) | **GET** /api/errors | List recent errors|
 
 # **listRecentErrors**
-> Array<HandlersErrorResponse> listRecentErrors()
+> HandlersPaginatedErrorResponse listRecentErrors()
 
-Get a list of the most recent system errors with optional searching
+Get a paginated list of the most recent system errors with optional searching
 
 ### Example
 
@@ -23,10 +23,12 @@ const configuration = new Configuration();
 const apiInstance = new ErrorsApi(configuration);
 
 let search: string; //Search by error message or command (optional) (default to undefined)
-let limit: number; //Limit number of results (optional) (default to 10)
+let page: number; //Page number (default: 1) (optional) (default to undefined)
+let limit: number; //Number of items per page (default: 10) (optional) (default to undefined)
 
 const { status, data } = await apiInstance.listRecentErrors(
     search,
+    page,
     limit
 );
 ```
@@ -36,12 +38,13 @@ const { status, data } = await apiInstance.listRecentErrors(
 |Name | Type | Description  | Notes|
 |------------- | ------------- | ------------- | -------------|
 | **search** | [**string**] | Search by error message or command | (optional) defaults to undefined|
-| **limit** | [**number**] | Limit number of results | (optional) defaults to 10|
+| **page** | [**number**] | Page number (default: 1) | (optional) defaults to undefined|
+| **limit** | [**number**] | Number of items per page (default: 10) | (optional) defaults to undefined|
 
 
 ### Return type
 
-**Array<HandlersErrorResponse>**
+**HandlersPaginatedErrorResponse**
 
 ### Authorization
 

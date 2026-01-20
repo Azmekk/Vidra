@@ -26,6 +26,8 @@ import type { HandlersCreateVideoRequest } from '../models';
 // @ts-ignore
 import type { HandlersMetadataRequest } from '../models';
 // @ts-ignore
+import type { HandlersPaginatedVideoResponse } from '../models';
+// @ts-ignore
 import type { HandlersUpdateVideoRequest } from '../models';
 // @ts-ignore
 import type { HandlersVideoResponse } from '../models';
@@ -74,7 +76,7 @@ export const VideosApiAxiosParamCreator = function (configuration?: Configuratio
             };
         },
         /**
-         * Delete a video record by ID
+         * Delete a video record by ID and its associated files
          * @summary Delete a video
          * @param {string} id Video ID
          * @param {*} [options] Override http request option.
@@ -241,14 +243,16 @@ export const VideosApiAxiosParamCreator = function (configuration?: Configuratio
             };
         },
         /**
-         * Get a list of all videos with optional searching and ordering
+         * Get a paginated list of all videos with optional searching and ordering
          * @summary List all videos
          * @param {string} [search] Search by name or URL
          * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
+         * @param {number} [page] Page number (default: 1)
+         * @param {number} [limit] Number of items per page (default: 10)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listVideos: async (search?: string, order?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        listVideos: async (search?: string, order?: string, page?: number, limit?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/api/videos`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -267,6 +271,14 @@ export const VideosApiAxiosParamCreator = function (configuration?: Configuratio
 
             if (order !== undefined) {
                 localVarQueryParameter['order'] = order;
+            }
+
+            if (page !== undefined) {
+                localVarQueryParameter['page'] = page;
+            }
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
             }
 
             localVarHeaderParameter['Accept'] = 'application/json';
@@ -342,7 +354,7 @@ export const VideosApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Delete a video record by ID
+         * Delete a video record by ID and its associated files
          * @summary Delete a video
          * @param {string} id Video ID
          * @param {*} [options] Override http request option.
@@ -406,15 +418,17 @@ export const VideosApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Get a list of all videos with optional searching and ordering
+         * Get a paginated list of all videos with optional searching and ordering
          * @summary List all videos
          * @param {string} [search] Search by name or URL
          * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
+         * @param {number} [page] Page number (default: 1)
+         * @param {number} [limit] Number of items per page (default: 10)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<HandlersVideoResponse>>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.listVideos(search, order, options);
+        async listVideos(search?: string, order?: string, page?: number, limit?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HandlersPaginatedVideoResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.listVideos(search, order, page, limit, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['VideosApi.listVideos']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -453,7 +467,7 @@ export const VideosApiFactory = function (configuration?: Configuration, basePat
             return localVarFp.createVideo(video, options).then((request) => request(axios, basePath));
         },
         /**
-         * Delete a video record by ID
+         * Delete a video record by ID and its associated files
          * @summary Delete a video
          * @param {string} id Video ID
          * @param {*} [options] Override http request option.
@@ -502,15 +516,17 @@ export const VideosApiFactory = function (configuration?: Configuration, basePat
             return localVarFp.listAllProgress(options).then((request) => request(axios, basePath));
         },
         /**
-         * Get a list of all videos with optional searching and ordering
+         * Get a paginated list of all videos with optional searching and ordering
          * @summary List all videos
          * @param {string} [search] Search by name or URL
          * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
+         * @param {number} [page] Page number (default: 1)
+         * @param {number} [limit] Number of items per page (default: 10)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig): AxiosPromise<Array<HandlersVideoResponse>> {
-            return localVarFp.listVideos(search, order, options).then((request) => request(axios, basePath));
+        listVideos(search?: string, order?: string, page?: number, limit?: number, options?: RawAxiosRequestConfig): AxiosPromise<HandlersPaginatedVideoResponse> {
+            return localVarFp.listVideos(search, order, page, limit, options).then((request) => request(axios, basePath));
         },
         /**
          * Update video details like name
@@ -542,7 +558,7 @@ export class VideosApi extends BaseAPI {
     }
 
     /**
-     * Delete a video record by ID
+     * Delete a video record by ID and its associated files
      * @summary Delete a video
      * @param {string} id Video ID
      * @param {*} [options] Override http request option.
@@ -596,15 +612,17 @@ export class VideosApi extends BaseAPI {
     }
 
     /**
-     * Get a list of all videos with optional searching and ordering
+     * Get a paginated list of all videos with optional searching and ordering
      * @summary List all videos
      * @param {string} [search] Search by name or URL
      * @param {string} [order] Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)
+     * @param {number} [page] Page number (default: 1)
+     * @param {number} [limit] Number of items per page (default: 10)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public listVideos(search?: string, order?: string, options?: RawAxiosRequestConfig) {
-        return VideosApiFp(this.configuration).listVideos(search, order, options).then((request) => request(this.axios, this.basePath));
+    public listVideos(search?: string, order?: string, page?: number, limit?: number, options?: RawAxiosRequestConfig) {
+        return VideosApiFp(this.configuration).listVideos(search, order, page, limit, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

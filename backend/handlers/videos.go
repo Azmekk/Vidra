@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
 	"github.com/Azmekk/Vidra/backend/services"
@@ -254,25 +255,60 @@ func (h *VideoHandler) GetVideo(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
 }
 
+type PaginatedVideoResponse struct {
+	TotalCount  int64           `json:"totalCount"`
+	TotalPages  int             `json:"totalPages"`
+	CurrentPage int             `json:"currentPage"`
+	Limit       int             `json:"limit"`
+	Videos      []VideoResponse `json:"videos"`
+}
+
 // ListVideos godoc
 // @Summary List all videos
-// @Description Get a list of all videos with optional searching and ordering
+// @Description Get a paginated list of all videos with optional searching and ordering
 // @ID listVideos
 // @Tags videos
 // @Accept json
 // @Produce json
 // @Param search query string false "Search by name or URL"
 // @Param order query string false "Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)"
-// @Success 200 {array} VideoResponse
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Number of items per page (default: 10)"
+// @Success 200 {object} PaginatedVideoResponse
 // @Failure 500 {object} map[string]string
 // @Router /api/videos [get]
 func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	order := r.URL.Query().Get("order")
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page := 1
+	limit := 10
+
+	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+		page = p
+	}
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = l
+	}
+
+	offset := (page - 1) * limit
+
+	searchParam := pgtype.Text{String: search, Valid: true}
+	orderParam := pgtype.Text{String: order, Valid: true}
+
+	totalCount, err := h.Queries.CountVideos(r.Context(), searchParam)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	videos, err := h.Queries.ListVideos(r.Context(), database.ListVideosParams{
-		Search:   pgtype.Text{String: search, Valid: true},
-		Ordering: pgtype.Text{String: order, Valid: true},
+		Search:   searchParam,
+		Ordering: orderParam,
+		Limit:    int32(limit),
+		Offset:   int32(offset),
 	})
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
@@ -284,7 +320,15 @@ func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 		responses[i] = mapVideoToResponse(v)
 	}
 
-	utils.RespondWithJSON(w, http.StatusOK, responses)
+	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
+
+	utils.RespondWithJSON(w, http.StatusOK, PaginatedVideoResponse{
+		TotalCount:  totalCount,
+		TotalPages:  totalPages,
+		CurrentPage: page,
+		Limit:       limit,
+		Videos:      responses,
+	})
 }
 
 type UpdateVideoRequest struct {

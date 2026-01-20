@@ -70,7 +70,7 @@ No authorization required
 # **deleteVideo**
 > deleteVideo()
 
-Delete a video record by ID
+Delete a video record by ID and its associated files
 
 ### Example
 
@@ -116,6 +116,7 @@ No authorization required
 |-------------|-------------|------------------|
 |**204** | No Content |  -  |
 |**400** | Bad Request |  -  |
+|**404** | Not Found |  -  |
 |**500** | Internal Server Error |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -324,9 +325,9 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **listVideos**
-> Array<HandlersVideoResponse> listVideos()
+> HandlersPaginatedVideoResponse listVideos()
 
-Get a list of all videos with optional searching and ordering
+Get a paginated list of all videos with optional searching and ordering
 
 ### Example
 
@@ -341,10 +342,14 @@ const apiInstance = new VideosApi(configuration);
 
 let search: string; //Search by name or URL (optional) (default to undefined)
 let order: string; //Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc) (optional) (default to undefined)
+let page: number; //Page number (default: 1) (optional) (default to undefined)
+let limit: number; //Number of items per page (default: 10) (optional) (default to undefined)
 
 const { status, data } = await apiInstance.listVideos(
     search,
-    order
+    order,
+    page,
+    limit
 );
 ```
 
@@ -354,11 +359,13 @@ const { status, data } = await apiInstance.listVideos(
 |------------- | ------------- | ------------- | -------------|
 | **search** | [**string**] | Search by name or URL | (optional) defaults to undefined|
 | **order** | [**string**] | Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc) | (optional) defaults to undefined|
+| **page** | [**number**] | Page number (default: 1) | (optional) defaults to undefined|
+| **limit** | [**number**] | Number of items per page (default: 10) | (optional) defaults to undefined|
 
 
 ### Return type
 
-**Array<HandlersVideoResponse>**
+**HandlersPaginatedVideoResponse**
 
 ### Authorization
 

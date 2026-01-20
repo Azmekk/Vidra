@@ -19,7 +19,12 @@ ORDER BY
     CASE WHEN sqlc.arg('ordering') = 'created_at_asc' THEN created_at END ASC,
     CASE WHEN sqlc.arg('ordering') = 'status_asc' THEN download_status END ASC,
     CASE WHEN sqlc.arg('ordering') = 'status_desc' THEN download_status END DESC,
-    CASE WHEN sqlc.arg('ordering') = 'created_at_desc' OR sqlc.arg('ordering') = '' OR sqlc.arg('ordering') IS NULL THEN created_at END DESC;
+    CASE WHEN sqlc.arg('ordering') = 'created_at_desc' OR sqlc.arg('ordering') = '' OR sqlc.arg('ordering') IS NULL THEN created_at END DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountVideos :one
+SELECT COUNT(*) FROM videos
+WHERE (name ILIKE '%' || sqlc.arg('search') || '%' OR original_url ILIKE '%' || sqlc.arg('search') || '%');
 
 -- name: UpdateVideoStatus :one
 UPDATE videos
