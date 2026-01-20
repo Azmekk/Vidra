@@ -4,6 +4,7 @@
   import { page } from "$app/stores";
   import { ModeWatcher } from "mode-watcher";
   import ModeToggle from "$lib/components/mode-toggle.svelte";
+  import ServerInfo from "$lib/components/server-info.svelte";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
   import { ytdlpApi } from "$lib/api-client";
@@ -79,6 +80,7 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <ServerInfo />
         <button
           onclick={updateYtdlp}
           disabled={isUpdatingYtdlp}

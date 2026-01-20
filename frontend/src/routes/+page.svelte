@@ -64,6 +64,11 @@
 
     ws = new WebSocket(wsUrl);
 
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      window.dispatchEvent(new CustomEvent("ws_open"));
+    };
+
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "progress") {
@@ -105,6 +110,7 @@
 
     ws.onclose = () => {
       console.log("WebSocket disconnected, retrying in 3s...");
+      window.dispatchEvent(new CustomEvent("ws_close"));
       setTimeout(connectWebSocket, 3000);
     };
 

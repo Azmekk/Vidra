@@ -14,8 +14,9 @@
 
 
 
-export * from './api/errors-api';
-export * from './api/system-api';
-export * from './api/videos-api';
-export * from './api/ytdlp-api';
+export interface HandlersSystemInfoResponse {
+    'diskUsageGB'?: number;
+    'downloadsSize'?: number;
+    'status'?: string;
+}
 
