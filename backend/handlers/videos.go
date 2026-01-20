@@ -85,6 +85,7 @@ type CreateVideoRequest struct {
 	Name        string `json:"name"`
 	DownloadURL string `json:"downloadUrl"`
 	FormatID    string `json:"formatId"`
+	ReEncode    bool   `json:"reEncode"`
 }
 
 func (r *CreateVideoRequest) Validate() error {
@@ -179,7 +180,7 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Start background download
 	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
-	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name)
+	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name, req.ReEncode)
 
 	h.Ws.Broadcast("video_created", mapVideoToResponse(video))
 

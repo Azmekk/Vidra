@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **downloadUrl** | **string** |  | [optional] [default to undefined]
 **formatId** | **string** |  | [optional] [default to undefined]
 **name** | **string** |  | [optional] [default to undefined]
+**reEncode** | **boolean** |  | [optional] [default to undefined]
 
 ## Example
 
@@ -18,6 +19,7 @@ const instance: HandlersCreateVideoRequest = {
     downloadUrl,
     formatId,
     name,
+    reEncode,
 };
 ```
 

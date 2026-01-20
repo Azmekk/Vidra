@@ -21,6 +21,7 @@
     FileVideo,
     Clock,
     Type,
+    X,
   } from "@lucide/svelte";
   import { Separator } from "$lib/components/ui/separator/index.js";
 
@@ -29,6 +30,7 @@
   let loading = $state(false);
   let metadata: ServicesVideoMetadata | null = $state(null);
   let selectedFormatId = $state<string>("");
+  let reEncode = $state(true);
   let error = $state<string | null>(null);
   let searchQuery = $state("");
 
@@ -114,6 +116,7 @@
         downloadUrl: url,
         formatId: selectedFormatId || undefined,
         name: customName || metadata?.title || "New Download",
+        reEncode: reEncode,
       });
       goto("/");
     } catch (e) {
@@ -547,6 +550,24 @@
 
   	          </Select.Root>
 
+  	          <div class="flex items-center justify-between px-2 pt-6 border-t border-muted">
+                <div class="space-y-0.5">
+                  <Label class="text-lg font-bold">Re-encode to H.264</Label>
+                  <p class="text-sm text-muted-foreground font-medium">
+                    Ensures compatibility but takes longer
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onclick={() => reEncode = !reEncode}
+                  class="relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 {reEncode ? 'bg-primary' : 'bg-muted'}"
+                  aria-label="Toggle re-encoding"
+                >
+                  <span
+                    class="pointer-events-none block h-6 w-6 rounded-full bg-background shadow-lg ring-0 transition-transform {reEncode ? 'translate-x-6' : 'translate-x-0'}"
+                  ></span>
+                </button>
+              </div>
   	        </div>
 
   	      </div>
@@ -583,11 +604,21 @@
 
   	            placeholder="Video Name (Optional)"
 
-  	            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-4 text-lg font-medium focus:outline-none focus:ring-0"
+  	            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-14 text-lg font-medium focus:outline-none focus:ring-0"
 
   	            disabled={loading}
 
   	          />
+
+              {#if customName}
+                <button
+                  onclick={() => customName = ""}
+                  class="absolute right-6 top-1/2 -translate-y-1/2 rounded-full p-2 hover:bg-muted transition-colors"
+                  aria-label="Clear name"
+                >
+                  <X class="h-5 w-5 text-muted-foreground" />
+                </button>
+              {/if}
 
   	        </div>
 

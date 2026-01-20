@@ -215,7 +215,7 @@ func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*
 	return metadata, nil
 }
 
-func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string) {
+func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string, reEncode bool) {
 	idStr := id.String()
 	finalBaseName = utils.SanitizeFilename(finalBaseName)
 
@@ -350,85 +350,100 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		}
 		log.Printf("INFO [%s]: Found temporary video file: %s\n", idStr, tempFile)
 
-		// 3. Encode to H264 and rename
-		finalFileName := finalBaseName + ".mp4"
-		finalPath := filepath.Join("downloads", finalFileName)
-		tempEncodePath := filepath.Join("downloads", idStr+"_encoded.mp4")
+		// 3. Process video (Encode or Rename)
+		var finalFileName string
+		if reEncode {
+			finalFileName = finalBaseName + ".mp4"
+			finalPath := filepath.Join("downloads", finalFileName)
+			tempEncodePath := filepath.Join("downloads", idStr+"_encoded.mp4")
 
-		log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, tempEncodePath)
-		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
+			log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, tempEncodePath)
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
 
-		// Get duration for progress calculation
-		durationCmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", tempFile)
-		durationOut, err := durationCmd.Output()
-		duration := 0.0
-		if err == nil {
-			duration, _ = strconv.ParseFloat(strings.TrimSpace(string(durationOut)), 64)
-		}
-		log.Printf("INFO [%s]: Video duration: %.2fs\n", idStr, duration)
+			// Get duration for progress calculation
+			durationCmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", tempFile)
+			durationOut, err := durationCmd.Output()
+			duration := 0.0
+			if err == nil {
+				duration, _ = strconv.ParseFloat(strings.TrimSpace(string(durationOut)), 64)
+			}
+			log.Printf("INFO [%s]: Video duration: %.2fs\n", idStr, duration)
 
-		prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
 
-		encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
+			encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
 
-		var encodeOutput bytes.Buffer
-		encodeStdout, err := encodeCmd.StdoutPipe()
-		if err != nil {
-			log.Printf("ERROR [%s]: Failed to create ffmpeg stdout pipe: %v\n", idStr, err)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to create ffmpeg stdout pipe: "+err.Error())
-			return
-		}
-		encodeCmd.Stderr = &encodeOutput
+			var encodeOutput bytes.Buffer
+			encodeStdout, err := encodeCmd.StdoutPipe()
+			if err != nil {
+				log.Printf("ERROR [%s]: Failed to create ffmpeg stdout pipe: %v\n", idStr, err)
+				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to create ffmpeg stdout pipe: "+err.Error())
+				return
+			}
+			encodeCmd.Stderr = &encodeOutput
 
-		if err := encodeCmd.Start(); err != nil {
-			log.Printf("ERROR [%s]: Failed to start ffmpeg: %v\n", idStr, err)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to start ffmpeg: "+err.Error())
-			return
-		}
+			if err := encodeCmd.Start(); err != nil {
+				log.Printf("ERROR [%s]: Failed to start ffmpeg: %v\n", idStr, err)
+				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to start ffmpeg: "+err.Error())
+				return
+			}
 
-		encodeScanner := bufio.NewScanner(encodeStdout)
-		for encodeScanner.Scan() {
-			line := encodeScanner.Text()
-			if after, ok := strings.CutPrefix(line, "out_time_ms="); ok {
-				timeUsStr := after
-				timeUs, _ := strconv.ParseFloat(timeUsStr, 64)
-				if duration > 0 {
-					encodingPercent := (timeUs / 1000000.0 / duration) * 100.0
-					if encodingPercent > 100 {
-						encodingPercent = 100
+			encodeScanner := bufio.NewScanner(encodeStdout)
+			for encodeScanner.Scan() {
+				line := encodeScanner.Text()
+				if after, ok := strings.CutPrefix(line, "out_time_ms="); ok {
+					timeUsStr := after
+					timeUs, _ := strconv.ParseFloat(timeUsStr, 64)
+					if duration > 0 {
+						encodingPercent := (timeUs / 1000000.0 / duration) * 100.0
+						if encodingPercent > 100 {
+							encodingPercent = 100
+						}
+						prog.Update(s.ws, idStr, 100, encodingPercent, "", "", StatusEncoding, "Encoding in progress...")
 					}
-					prog.Update(s.ws, idStr, 100, encodingPercent, "", "", StatusEncoding, "Encoding in progress...")
 				}
 			}
+
+			if err := encodeCmd.Wait(); err != nil {
+				outputStr := encodeOutput.String()
+				log.Printf("ERROR [%s]: ffmpeg encoding failed: %v\nOutput: %s\n", idStr, err, outputStr)
+				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
+				os.Remove(tempEncodePath) // Clean up partial encoded file
+
+				s.queries.CreateError(context.Background(), database.CreateErrorParams{
+					VideoID:      id,
+					ErrorMessage: err.Error(),
+					Command:      "ffmpeg",
+					Output:       outputStr,
+				})
+				s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
+					ID:             id,
+					DownloadStatus: string(StatusError),
+				})
+				return
+			}
+
+			// Move encoded file to final path
+			if err := os.Rename(tempEncodePath, finalPath); err != nil {
+				log.Printf("ERROR [%s]: Failed to rename encoded file: %v\n", idStr, err)
+				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename encoded file: "+err.Error())
+				return
+			}
+			log.Printf("INFO [%s]: Encoding successful. Cleaning up temporary file: %s\n", idStr, tempFile)
+		} else {
+			log.Printf("INFO [%s]: Skipping re-encoding as requested.\n", idStr)
+			prog.Update(s.ws, idStr, 100, 100, "", "", StatusEncoding, "Skipping encoding...")
+
+			finalFileName = finalBaseName + filepath.Ext(tempFile)
+			finalPath := filepath.Join("downloads", finalFileName)
+
+			if err := os.Rename(tempFile, finalPath); err != nil {
+				log.Printf("ERROR [%s]: Failed to rename downloaded file: %v\n", idStr, err)
+				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename downloaded file: "+err.Error())
+				return
+			}
+			log.Printf("INFO [%s]: Rename successful: %s -> %s\n", idStr, tempFile, finalPath)
 		}
-
-		if err := encodeCmd.Wait(); err != nil {
-			outputStr := encodeOutput.String()
-			log.Printf("ERROR [%s]: ffmpeg encoding failed: %v\nOutput: %s\n", idStr, err, outputStr)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
-			os.Remove(tempEncodePath) // Clean up partial encoded file
-
-			s.queries.CreateError(context.Background(), database.CreateErrorParams{
-				VideoID:      id,
-				ErrorMessage: err.Error(),
-				Command:      "ffmpeg",
-				Output:       outputStr,
-			})
-			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-				ID:             id,
-				DownloadStatus: string(StatusError),
-			})
-			return
-		}
-
-		// Move encoded file to final path
-		if err := os.Rename(tempEncodePath, finalPath); err != nil {
-			log.Printf("ERROR [%s]: Failed to rename encoded file: %v\n", idStr, err)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename encoded file: "+err.Error())
-			return
-		}
-
-		log.Printf("INFO [%s]: Encoding successful. Cleaning up temporary file: %s\n", idStr, tempFile)
 
 		// 4. Handle thumbnail
 		finalThumbnailName := finalBaseName + ".jpg"

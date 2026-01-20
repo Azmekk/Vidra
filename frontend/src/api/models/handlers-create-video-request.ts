@@ -18,5 +18,6 @@ export interface HandlersCreateVideoRequest {
     'downloadUrl'?: string;
     'formatId'?: string;
     'name'?: string;
+    'reEncode'?: boolean;
 }
 
