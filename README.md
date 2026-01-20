@@ -1,0 +1,77 @@
+# 🦦 Vidra
+
+Vidra is a high-performance, full-stack video downloader that leverages the power of `yt-dlp` and `ffmpeg` to provide a seamless downloading experience. It features a robust Go backend and a reactive Svelte 5 frontend.
+
+---
+
+## ⚡ Quick Start
+
+Get Vidra up and running in seconds using Docker:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/Vidra.git
+cd Vidra
+
+# 2. Setup configuration
+cp docker-compose.yml.example docker-compose.yml
+
+# 3. Launch
+docker compose up -d
+```
+
+Access the web interface at **`http://localhost`**.
+
+---
+
+## ⚙️ Configuration
+
+You can customize Vidra by editing the `docker-compose.yml` file:
+
+### 📁 Download Folder
+By default, videos are saved to the `./downloads` directory in the project root. To change this, modify the volume mappings for both the `backend` and `proxy` services:
+
+```yaml
+services:
+  backend:
+    volumes:
+      - /your/custom/path:/app/downloads # Change this
+  # ...
+  proxy:
+    volumes:
+      - /your/custom/path:/app/downloads:ro # Match it here (read-only)
+```
+
+### 🌍 Environment Variables
+- **`DATABASE_URL`**: PostgreSQL connection string for the backend.
+- **`VITE_BACKEND_URL`**: The URL where the frontend can reach the backend API.
+- **`POSTGRES_PASSWORD`**: Secure your database by changing the default password.
+
+---
+
+## 🛠 Technologies
+
+### Backend
+![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![yt-dlp](https://img.shields.io/badge/yt--dlp-FF0000?style=for-the-badge&logo=youtube&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)
+![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
+
+### Frontend
+![Svelte 5](https://img.shields.io/badge/Svelte_5-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)
+![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)
+![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS_4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+
+---
+
+## 🏗 Project Structure
+
+- **`backend/`**: Go REST API using Chi, `sqlc` for database interactions, and background worker orchestration.
+- **`frontend/`**: Modern Svelte 5 application using Runes for reactive state management and Tailwind CSS 4 for styling.
+- **`nginx.conf`**: Proxy configuration to serve both the API and the static frontend from a single port.
+
+## 📜 License
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
