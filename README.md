@@ -4,6 +4,36 @@ Vidra is a high-performance, full-stack video downloader that leverages the powe
 
 ---
 
+## 📸 Screenshots
+
+### Desktop
+<div align="center">
+  <img src="assets/Desktop_main_page.png" alt="Desktop Main Page" width="800">
+  <p><em>Main library dashboard</em></p>
+  <img src="assets/desktop_download_screen.png" alt="Desktop Download Screen" width="800">
+  <p><em>New download interface</em></p>
+</div>
+
+### Mobile
+<div align="center">
+  <table border="0">
+    <tr>
+      <td><img src="assets/mobile_main_screen.png" alt="Mobile Main" width="200"></td>
+      <td><img src="assets/mobile_new_download_preview.png" alt="Mobile Download" width="200"></td>
+      <td><img src="assets/mobile_quality_selection_preview.png" alt="Mobile Quality" width="200"></td>
+      <td><img src="assets/mobile_progress_preview.png" alt="Mobile Progress" width="200"></td>
+    </tr>
+    <tr>
+      <td align="center">Library</td>
+      <td align="center">New Download</td>
+      <td align="center">Format Selection</td>
+      <td align="center">Active Progress</td>
+    </tr>
+  </table>
+</div>
+
+---
+
 ## ⚡ Quick Start
 
 Get Vidra up and running in seconds using Docker:
