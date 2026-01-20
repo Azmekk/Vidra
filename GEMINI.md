@@ -11,6 +11,21 @@ The project is organized as a monorepo:
 
 ---
 
+## 🚀 CI/CD & Deployment
+
+Vidra features a fully automated CI/CD pipeline using GitHub Actions, making deployment and updates seamless.
+
+### Docker Images (GHCR)
+Production-ready images are automatically built and published to the GitHub Container Registry on every push to `main`:
+- **Backend**: `ghcr.io/azmekk/vidra-backend:main`
+- **Frontend**: `ghcr.io/azmekk/vidra-frontend:main`
+
+### Deployment Options
+1.  **Zero-Clone (Recommended)**: Deploy by only downloading `docker-compose.yml.example` and `nginx.conf`. This is the fastest way to run Vidra without needing the source code locally.
+2.  **Local Build**: Clone the repository and build the images manually using the provided Dockerfiles (primarily for development).
+
+---
+
 ## 🚀 Backend (`backend/`)
 
 The backend manages video format listing, background download orchestration, and progress tracking.

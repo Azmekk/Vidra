@@ -1,3 +1,10 @@
 #!/bin/bash
 
-git fetch && git pull && docker compose down && docker compose up -d --build
+# Update the repository code
+git fetch && git pull
+
+# Pull the latest pre-built images
+docker compose pull
+
+# Restart the containers
+docker compose up -d
