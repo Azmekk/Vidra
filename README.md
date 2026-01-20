@@ -7,6 +7,7 @@ Vidra is a high-performance, full-stack video downloader that leverages the powe
 ## Screenshots
 
 ### Desktop
+
 <div align="center">
   <img src="assets/Desktop_main_page.png" alt="Desktop Main Page" width="800">
   <p><em>Main library dashboard</em></p>
@@ -15,6 +16,7 @@ Vidra is a high-performance, full-stack video downloader that leverages the powe
 </div>
 
 ### Mobile
+
 <div align="center">
   <table border="0">
     <tr>
@@ -34,23 +36,61 @@ Vidra is a high-performance, full-stack video downloader that leverages the powe
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (Recommended)
 
-Get Vidra up and running in seconds using Docker:
+You don't need to clone the entire repository to run Vidra. You can just download the required configuration files and start:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/Vidra.git
-cd Vidra
+# 1. Create a directory for Vidra
+mkdir vidra && cd vidra
 
-# 2. Setup configuration
-cp docker-compose.yml.example docker-compose.yml
+# 2. Download the configuration files
+curl -L https://raw.githubusercontent.com/Azmekk/Vidra/master/docker-compose.yml.example -o docker-compose.yml
+curl -L https://raw.githubusercontent.com/Azmekk/Vidra/master/nginx.conf -o nginx.conf
 
 # 3. Launch
 docker compose up -d
 ```
 
-Access the web interface at **`http://localhost`**.
+> [!IMPORTANT]
+> **Before launching, please check:**
+>
+> - **Port 80**: By default, Vidra uses port 80. If you already have a web server (like another Nginx instance) running on port 80, you must change the `ports` mapping in `docker-compose.yml` (e.g., `"8080:80"`).
+> - **Downloads Folder**: Videos are saved to `./downloads` relative to where you run the command. Ensure this directory is writable and that you have enough disk space. You can change this path in the `volumes` section of both the `backend` and `proxy` services in `docker-compose.yml`.
+
+Access the web interface at **`http://localhost`** (or your custom port).
+
+---
+
+## 🛠 CI/CD & Docker Images
+
+This project uses GitHub Actions to automatically build and publish production-ready Docker images to the GitHub Container Registry (GHCR). **Pulling these images is the preferred way to run Vidra.**
+
+- **Backend Image**: `ghcr.io/azmekk/vidra-backend:main`
+- **Frontend Image**: `ghcr.io/azmekk/vidra-frontend:main`
+
+---
+
+## 🏗 Development / Building from Source
+
+Local building is discouraged unless you are contributing to the project or need custom modifications.
+
+If you must build from source:
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/Azmekk/Vidra.git
+   cd Vidra
+   ```
+
+2. **Configure for local build**:
+   Copy `docker-compose.yml.example` to `docker-compose.yml` and uncomment the `build:` lines while commenting out the `image:` lines for the `backend` and `frontend` services.
+
+3. **Build and Launch**:
+   ```bash
+   docker compose up -d --build
+   ```
 
 ---
 
@@ -59,6 +99,7 @@ Access the web interface at **`http://localhost`**.
 You can customize Vidra by editing the `docker-compose.yml` file:
 
 ### 📁 Download Folder
+
 By default, videos are saved to the `./downloads` directory in the project root. To change this, modify the volume mappings for both the `backend` and `proxy` services:
 
 ```yaml
@@ -73,6 +114,7 @@ services:
 ```
 
 ### 🌍 Environment Variables
+
 - **`DATABASE_URL`**: PostgreSQL connection string for the backend.
 - **`VITE_BACKEND_URL`**: The URL where the frontend can reach the backend API.
 - **`POSTGRES_PASSWORD`**: Secure your database by changing the default password.
@@ -82,6 +124,7 @@ services:
 ## 🛠 Technologies
 
 ### Backend
+
 ![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-FF0000?style=for-the-badge&logo=youtube&logoColor=white)
@@ -89,6 +132,7 @@ services:
 ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
 
 ### Frontend
+
 ![Svelte 5](https://img.shields.io/badge/Svelte_5-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)
 ![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)
 ![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS_4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
@@ -104,4 +148,5 @@ services:
 - **`nginx.conf`**: Proxy configuration to serve both the API and the static frontend from a single port.
 
 ## 📜 License
+
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.

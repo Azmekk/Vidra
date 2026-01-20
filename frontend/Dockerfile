@@ -1,6 +1,9 @@
 # Build stage
 FROM oven/bun:1.3.6 AS builder
 
+ARG VITE_BACKEND_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+
 WORKDIR /app
 
 # Copy package files and install dependencies
