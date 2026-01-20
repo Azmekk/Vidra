@@ -73,7 +73,8 @@
   </DropdownMenu.Trigger>
   <DropdownMenu.Content
     align="end"
-    class="w-80 rounded-3xl p-6 shadow-2xl border-2"
+    sideOffset={8}
+    class="w-[calc(100vw-2rem)] sm:w-80 rounded-[1.5rem] p-6 shadow-2xl border-2"
   >
     <div class="space-y-4">
       <div class="flex items-center justify-between">
