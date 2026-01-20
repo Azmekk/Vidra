@@ -4,7 +4,7 @@ Vidra is a high-performance, full-stack video downloader that leverages the powe
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 ### Desktop
 <div align="center">
