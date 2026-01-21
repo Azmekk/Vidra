@@ -33,7 +33,9 @@
   } from "@lucide/svelte";
 
   let { data } = $props();
-  let videos: HandlersVideoResponse[] = $state(data.paginatedVideos.videos || []);
+  let videos: HandlersVideoResponse[] = $state(
+    data.paginatedVideos.videos || [],
+  );
   let totalCount = $state(data.paginatedVideos.totalCount || 0);
   let totalPages = $state(data.paginatedVideos.totalPages || 0);
   let currentPage = $state(data.paginatedVideos.currentPage || 1);
@@ -51,16 +53,9 @@
   let editingName = $state("");
 
   function connectWebSocket() {
-    let backendUrl = import.meta.env.VITE_BACKEND_URL || "";
-    let wsUrl: string;
-
-    if (backendUrl) {
-      wsUrl = backendUrl.replace(/^http/, "ws") + "/api/ws";
-    } else {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = window.location.host;
-      wsUrl = `${protocol}//${host}/api/ws`;
-    }
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/ws`;
 
     ws = new WebSocket(wsUrl);
 
@@ -92,9 +87,9 @@
           totalCount++;
           totalPages = Math.ceil(totalCount / limit);
         } else {
-           // Otherwise just update count
-           totalCount++;
-           totalPages = Math.ceil(totalCount / limit);
+          // Otherwise just update count
+          totalCount++;
+          totalPages = Math.ceil(totalCount / limit);
         }
       } else if (data.type === "video_deleted") {
         const videoExists = videos.some((v) => v.id === data.payload.id);
@@ -270,7 +265,11 @@
     </div>
     <div class="flex items-center gap-3">
       <SortAsc class="h-5 w-5 text-muted-foreground" />
-      <Select.Root type="single" bind:value={order} onValueChange={() => currentPage = 1}>
+      <Select.Root
+        type="single"
+        bind:value={order}
+        onValueChange={() => (currentPage = 1)}
+      >
         <Select.Trigger
           class="h-12 min-w-[180px] rounded-xl bg-muted/50 border-none font-bold"
         >
@@ -532,11 +531,18 @@
 
   {#if totalPages > 1}
     <div class="flex justify-center mt-12 pb-12">
-      <Pagination.Root count={totalCount} perPage={limit} bind:page={currentPage}>
+      <Pagination.Root
+        count={totalCount}
+        perPage={limit}
+        bind:page={currentPage}
+      >
         {#snippet children({ pages })}
           <Pagination.Content>
             <Pagination.Item>
-              <Pagination.PrevButton onclick={() => fetchVideos(debouncedSearch, order, currentPage - 1)}>
+              <Pagination.PrevButton
+                onclick={() =>
+                  fetchVideos(debouncedSearch, order, currentPage - 1)}
+              >
                 <ChevronLeft class="h-4 w-4" />
                 <span class="hidden sm:inline">Previous</span>
               </Pagination.PrevButton>
@@ -548,14 +554,22 @@
                 </Pagination.Item>
               {:else}
                 <Pagination.Item>
-                  <Pagination.Link {page} isActive={currentPage === page.value} onclick={() => fetchVideos(debouncedSearch, order, page.value)}>
+                  <Pagination.Link
+                    {page}
+                    isActive={currentPage === page.value}
+                    onclick={() =>
+                      fetchVideos(debouncedSearch, order, page.value)}
+                  >
                     {page.value}
                   </Pagination.Link>
                 </Pagination.Item>
               {/if}
             {/each}
             <Pagination.Item>
-              <Pagination.NextButton onclick={() => fetchVideos(debouncedSearch, order, currentPage + 1)}>
+              <Pagination.NextButton
+                onclick={() =>
+                  fetchVideos(debouncedSearch, order, currentPage + 1)}
+              >
                 <span class="hidden sm:inline">Next</span>
                 <ChevronRight class="h-4 w-4" />
               </Pagination.NextButton>
