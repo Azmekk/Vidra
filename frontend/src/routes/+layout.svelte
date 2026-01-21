@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./layout.css";
-  import favicon from "$lib/assets/favicon1.png";
+  import favicon from "$lib/assets/favicon-32x32.png";
   import { page } from "$app/stores";
   import { ModeWatcher } from "mode-watcher";
   import ModeToggle from "$lib/components/mode-toggle.svelte";
