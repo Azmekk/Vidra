@@ -24,7 +24,7 @@
     SortAsc,
     Copy,
     Check,
-    Loader2,
+    Loader,
     Pencil,
     X,
     Save,
@@ -259,7 +259,7 @@
       />
       {#if isLoading}
         <div class="absolute right-4 top-1/2 -translate-y-1/2">
-          <Loader2 class="h-5 w-5 animate-spin text-primary" />
+          <Loader class="h-5 w-5 animate-spin text-primary" />
         </div>
       {/if}
     </div>
@@ -315,7 +315,7 @@
           </div>
         {:else}
           <button
-            class="relative aspect-video w-full overflow-hidden bg-black transition-all"
+            class="relative aspect-video w-full overflow-hidden bg-black transition-all hover:cursor-pointer"
             onclick={() => isCompleted && video.id && togglePlay(video.id)}
             disabled={!isCompleted}
           >
@@ -374,7 +374,7 @@
                     variant="ghost"
                     size="icon"
                     onclick={() => renameVideo(video.id!)}
-                    class="h-10 w-10 shrink-0 text-green-600 hover:bg-green-500/10"
+                    class="h-10 w-10 shrink-0 text-green-600 hover:bg-green-500/10 hover:cursor-pointer"
                   >
                     <Save class="h-5 w-5" />
                   </Button.Root>
@@ -382,7 +382,7 @@
                     variant="ghost"
                     size="icon"
                     onclick={cancelEditing}
-                    class="h-10 w-10 shrink-0 text-muted-foreground hover:bg-muted"
+                    class="h-10 w-10 shrink-0 text-muted-foreground hover:bg-muted hover:cursor-pointer"
                   >
                     <X class="h-5 w-5" />
                   </Button.Root>
@@ -418,7 +418,7 @@
                   variant="secondary"
                   size="icon"
                   onclick={() => startEditing(video)}
-                  class="h-11 w-11 rounded-2xl"
+                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
                 >
                   <Pencil class="h-5 w-5" />
                 </Button.Root>
@@ -429,7 +429,7 @@
                   size="icon"
                   onclick={() =>
                     window.open(`/downloads/${video.fileName}`, "_blank")}
-                  class="h-11 w-11 rounded-2xl"
+                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
                 >
                   <ExternalLink class="h-5 w-5" />
                 </Button.Root>
@@ -439,7 +439,7 @@
                   href={`/downloads/${video.fileName}`}
                   download={video.fileName}
                   disabled={video.downloadStatus !== "completed"}
-                  class="h-11 w-11 rounded-2xl"
+                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
                 >
                   <Download class="h-5 w-5" />
                 </Button.Root>
@@ -448,7 +448,7 @@
                 variant="secondary"
                 size="icon"
                 onclick={() => video.id && deleteVideo(video.id)}
-                class="h-11 w-11 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                class="h-11 w-11 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive hover:cursor-pointer"
               >
                 <Trash2 class="h-5 w-5" />
               </Button.Root>
