@@ -80,13 +80,13 @@ func (p *DownloadProgress) Update(ws *WebSocketService, id string, percent, enco
 
 	if ws != nil {
 		ws.Broadcast("progress", map[string]interface{}{
-			"id":               id,
-			"percent":          percent,
+			"id":              id,
+			"percent":         percent,
 			"encodingPercent": encodingPercent,
-			"speed":            speed,
-			"eta":              eta,
-			"status":           status,
-			"last_output":      lastOutput,
+			"speed":           speed,
+			"eta":             eta,
+			"status":          status,
+			"last_output":     lastOutput,
 		})
 	}
 }
@@ -162,7 +162,7 @@ func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
 func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
 	cmd := exec.CommandContext(ctx, "yt-dlp", "--dump-json", "--flat-playlist", "--no-warnings", url)
 	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
-	
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
@@ -171,7 +171,7 @@ func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*
 		return nil, fmt.Errorf("failed to get metadata: %w (stderr: %s)", err, stderr.String())
 	}
 
-	// yt-dlp might output multiple lines if there's any noise, 
+	// yt-dlp might output multiple lines if there's any noise,
 	// we try to find the line that starts with {
 	var raw map[string]interface{}
 	lines := strings.Split(string(output), "\n")
@@ -371,7 +371,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 
 			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
 
-			encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
+			encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-crf", "23", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
 
 			var encodeOutput bytes.Buffer
 			encodeStdout, err := encodeCmd.StdoutPipe()
@@ -448,7 +448,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		// 4. Handle thumbnail
 		finalThumbnailName := finalBaseName + ".jpg"
 		finalThumbnailPath := filepath.Join("downloads", finalThumbnailName)
-		
+
 		// yt-dlp saves thumbnail as idStr.jpg due to --convert-thumbnails jpg and our -o pattern
 		tempThumbnailPath := filepath.Join("downloads", idStr+".jpg")
 		if _, err := os.Stat(tempThumbnailPath); err == nil {
