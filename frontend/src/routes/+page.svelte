@@ -302,14 +302,15 @@
       >
         {#if isActive && isCompleted}
           <div class="aspect-video w-full overflow-hidden bg-black">
+            <!-- svelte-ignore a11y_media_has_caption -->
             <video
               src={`/downloads/${video.fileName}`}
               controls
               autoplay
               playsinline
+              preload="metadata"
               class="h-full w-full object-contain"
             >
-              <track kind="captions" />
             </video>
           </div>
         {:else}
