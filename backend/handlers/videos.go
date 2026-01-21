@@ -182,7 +182,7 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
 	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name, req.ReEncode)
 
-	h.Ws.Broadcast("video_created", mapVideoToResponse(video))
+	h.Ws.Broadcast(services.WsEventVideoCreated, mapVideoToResponse(video))
 
 	utils.RespondWithJSON(w, http.StatusCreated, mapVideoToResponse(video))
 }
@@ -426,7 +426,7 @@ func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
 	// Delete files from filesystem
 	h.Downloader.DeleteVideoFiles(video.FileName.String, video.ThumbnailFileName.String)
 
-	h.Ws.Broadcast("video_deleted", map[string]string{"id": idStr})
+	h.Ws.Broadcast(services.WsEventVideoDeleted, map[string]string{"id": idStr})
 
 	w.WriteHeader(http.StatusNoContent)
 }

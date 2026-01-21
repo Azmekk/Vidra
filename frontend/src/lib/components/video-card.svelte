@@ -121,7 +121,7 @@
 
       {#if isCompleted}
         <div
-          class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-all duration-300 group-hover:bg-black/40 group-hover:opacity-100"
+          class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:bg-black/40 transition-all duration-300 group-hover:bg-black/40 group-hover:opacity-100"
         >
           <div
             class="rounded-full bg-white p-5 text-black shadow-2xl transition-transform duration-300 hover:scale-110 active:scale-90"

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { videosApi } from "$lib/api-client";
+  import { WsEventType } from "$lib/constants/websocket";
   import type {
     HandlersVideoResponse,
     ServicesDownloadProgressDTO,
@@ -55,7 +56,7 @@
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "progress") {
+      if (data.type === WsEventType.Progress) {
         progressMap[data.payload.id] = data.payload;
         if (data.payload.status === "completed") {
           (async () => {
@@ -69,7 +70,7 @@
             }
           })();
         }
-      } else if (data.type === "video_created") {
+      } else if (data.type === WsEventType.VideoCreated) {
         if (currentPage === 1 && order === "created_at_desc") {
           videos = [data.payload, ...videos.slice(0, limit - 1)];
           totalCount++;
@@ -78,7 +79,7 @@
           totalCount++;
           totalPages = Math.ceil(totalCount / limit);
         }
-      } else if (data.type === "video_deleted") {
+      } else if (data.type === WsEventType.VideoDeleted) {
         const videoExists = videos.some((v) => v.id === data.payload.id);
         if (videoExists) {
           fetchVideos(debouncedSearch, order, currentPage);

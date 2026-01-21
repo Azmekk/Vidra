@@ -8,6 +8,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// WsEventType represents WebSocket event types
+type WsEventType string
+
+const (
+	WsEventProgress     WsEventType = "progress"
+	WsEventVideoCreated WsEventType = "video_created"
+	WsEventVideoDeleted WsEventType = "video_deleted"
+)
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -17,8 +26,8 @@ var upgrader = websocket.Upgrader{
 }
 
 type WsEvent struct {
-	Type    string `json:"type"`
-	Payload any    `json:"payload"`
+	Type    WsEventType `json:"type"`
+	Payload any         `json:"payload"`
 }
 
 type WebSocketService struct {
@@ -93,7 +102,7 @@ func (s *WebSocketService) HandleConnections(w http.ResponseWriter, r *http.Requ
 	}()
 }
 
-func (s *WebSocketService) Broadcast(eventType string, payload interface{}) {
+func (s *WebSocketService) Broadcast(eventType WsEventType, payload interface{}) {
 	s.broadcast <- WsEvent{
 		Type:    eventType,
 		Payload: payload,

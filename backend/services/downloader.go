@@ -79,7 +79,7 @@ func (p *DownloadProgress) Update(ws *WebSocketService, id string, percent, enco
 	p.mu.Unlock()
 
 	if ws != nil {
-		ws.Broadcast("progress", map[string]interface{}{
+		ws.Broadcast(WsEventProgress, map[string]interface{}{
 			"id":              id,
 			"percent":         percent,
 			"encodingPercent": encodingPercent,
