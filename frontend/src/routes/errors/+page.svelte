@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { invalidateAll } from "$app/navigation";
-  import * as Card from "$lib/components/ui/card/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
   import * as Pagination from "$lib/components/ui/pagination/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
@@ -9,13 +7,13 @@
   import { errorsApi } from "$lib/api-client";
   import {
     RefreshCw,
-    AlertTriangle,
+    TriangleAlert,
     Terminal,
     ChevronDown,
     History,
     ShieldAlert,
     Search,
-    Loader2,
+    LoaderCircle,
     Copy,
     Check,
     ChevronLeft,
@@ -23,11 +21,20 @@
   } from "@lucide/svelte";
 
   let { data } = $props();
-  let errors = $state(data.paginatedErrors.errors || []);
-  let totalCount = $state(data.paginatedErrors.totalCount || 0);
-  let totalPages = $state(data.paginatedErrors.totalPages || 0);
-  let currentPage = $state(data.paginatedErrors.currentPage || 1);
-  let limit = $state(data.paginatedErrors.limit || 10);
+  let errors = $state<typeof data.paginatedErrors.errors>([]);
+  let totalCount = $state(0);
+  let totalPages = $state(0);
+  let currentPage = $state(1);
+  let limit = $state(10);
+
+  // Sync state when data changes (SSR initial load and navigation)
+  $effect(() => {
+    errors = data.paginatedErrors.errors || [];
+    totalCount = data.paginatedErrors.totalCount || 0;
+    totalPages = data.paginatedErrors.totalPages || 0;
+    currentPage = data.paginatedErrors.currentPage || 1;
+    limit = data.paginatedErrors.limit || 10;
+  });
 
   let search = $state("");
   let debouncedSearch = $state("");
@@ -110,7 +117,7 @@
   </div>
 
   <div
-    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-6 rounded-[2rem] border shadow-sm"
+    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-6 rounded-4xl border shadow-sm"
   >
     <div class="relative flex-1">
       <Search
@@ -124,15 +131,15 @@
       />
       {#if isLoading}
         <div class="absolute right-4 top-1/2 -translate-y-1/2">
-          <Loader2 class="h-5 w-5 animate-spin text-primary" />
+          <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
         </div>
       {/if}
     </div>
   </div>
 
-  {#if errors.length === 0}
+  {#if errors?.length === 0}
     <div
-      class="flex min-h-[400px] flex-col items-center justify-center rounded-[3rem] border-2 border-dashed p-12 text-center animate-in zoom-in-95 duration-500"
+      class="flex min-h-100 flex-col items-center justify-center rounded-[3rem] border-2 border-dashed p-12 text-center animate-in zoom-in-95 duration-500"
     >
       <div
         class="rounded-3xl bg-green-500/10 p-6 text-green-600 dark:text-green-500"
@@ -165,7 +172,7 @@
               <div
                 class="mt-1 shrink-0 rounded-2xl bg-destructive/10 p-3 text-destructive shadow-sm shadow-destructive/10"
               >
-                <AlertTriangle class="h-6 w-6" />
+                <TriangleAlert class="h-6 w-6" />
               </div>
               <div class="space-y-2 text-left">
                 <div class="flex flex-wrap items-center gap-3">
@@ -255,7 +262,7 @@
                     Process Output
                   </div>
                   <div
-                    class="max-h-[400px] overflow-y-auto rounded-3xl bg-zinc-950 p-6 font-mono text-xs leading-relaxed border-2 border-white/5 shadow-inner"
+                    class="max-h-100 overflow-y-auto rounded-3xl bg-zinc-950 p-6 font-mono text-xs leading-relaxed border-2 border-white/5 shadow-inner"
                   >
                     {#if error.output}
                       <pre
@@ -279,11 +286,17 @@
 
     {#if totalPages > 1}
       <div class="flex justify-center mt-12 pb-12">
-        <Pagination.Root count={totalCount} perPage={limit} bind:page={currentPage}>
+        <Pagination.Root
+          count={totalCount}
+          perPage={limit}
+          bind:page={currentPage}
+        >
           {#snippet children({ pages })}
             <Pagination.Content>
               <Pagination.Item>
-                <Pagination.PrevButton onclick={() => fetchErrors(debouncedSearch, currentPage - 1)}>
+                <Pagination.PrevButton
+                  onclick={() => fetchErrors(debouncedSearch, currentPage - 1)}
+                >
                   <ChevronLeft class="h-4 w-4" />
                   <span class="hidden sm:inline">Previous</span>
                 </Pagination.PrevButton>
@@ -295,14 +308,20 @@
                   </Pagination.Item>
                 {:else}
                   <Pagination.Item>
-                    <Pagination.Link {page} isActive={currentPage === page.value} onclick={() => fetchErrors(debouncedSearch, page.value)}>
+                    <Pagination.Link
+                      {page}
+                      isActive={currentPage === page.value}
+                      onclick={() => fetchErrors(debouncedSearch, page.value)}
+                    >
                       {page.value}
                     </Pagination.Link>
                   </Pagination.Item>
                 {/if}
               {/each}
               <Pagination.Item>
-                <Pagination.NextButton onclick={() => fetchErrors(debouncedSearch, currentPage + 1)}>
+                <Pagination.NextButton
+                  onclick={() => fetchErrors(debouncedSearch, currentPage + 1)}
+                >
                   <span class="hidden sm:inline">Next</span>
                   <ChevronRight class="h-4 w-4" />
                 </Pagination.NextButton>

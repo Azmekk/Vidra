@@ -1,45 +1,31 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import { videosApi } from "$lib/api-client";
   import type {
     HandlersVideoResponse,
     ServicesDownloadProgressDTO,
   } from "$api/index";
-  import * as Card from "$lib/components/ui/card/index.js";
-  import * as Button from "$lib/components/ui/button/index.js";
-  import * as Select from "$lib/components/ui/select/index.js";
-  import * as Pagination from "$lib/components/ui/pagination/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Progress } from "$lib/components/ui/progress/index.js";
-  import {
-    Plus,
-    Trash2,
-    Play,
-    ExternalLink,
-    Clock,
-    Download,
-    HardDrive,
-    Search,
-    SortAsc,
-    Copy,
-    Check,
-    Loader,
-    Pencil,
-    X,
-    Save,
-    ChevronLeft,
-    ChevronRight,
-  } from "@lucide/svelte";
+
+  import PageHeader from "$lib/components/page-header.svelte";
+  import SearchSortBar from "$lib/components/search-sort-bar.svelte";
+  import VideosGrid from "$lib/components/videos-grid.svelte";
+  import VideosPagination from "$lib/components/videos-pagination.svelte";
 
   let { data } = $props();
-  let videos: HandlersVideoResponse[] = $state(
-    data.paginatedVideos.videos || [],
-  );
-  let totalCount = $state(data.paginatedVideos.totalCount || 0);
-  let totalPages = $state(data.paginatedVideos.totalPages || 0);
-  let currentPage = $state(data.paginatedVideos.currentPage || 1);
-  let limit = $state(data.paginatedVideos.limit || 10);
+  let videos: HandlersVideoResponse[] = $state([]);
+  let totalCount = $state(0);
+  let totalPages = $state(0);
+  let currentPage = $state(1);
+  let limit = $state(10);
+
+  // Sync state when data changes (SSR initial load and navigation)
+  $effect(() => {
+    videos = data.paginatedVideos.videos || [];
+    totalCount = data.paginatedVideos.totalCount || 0;
+    totalPages = data.paginatedVideos.totalPages || 0;
+    currentPage = data.paginatedVideos.currentPage || 1;
+    limit = data.paginatedVideos.limit || 10;
+  });
 
   let progressMap: Record<string, ServicesDownloadProgressDTO> = $state({});
   let ws: WebSocket;
@@ -51,6 +37,9 @@
 
   let editingId = $state<string | null>(null);
   let editingName = $state("");
+
+  let copiedId = $state<string | null>(null);
+  let activeVideoId: string | null = $state(null);
 
   function connectWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -81,13 +70,11 @@
           })();
         }
       } else if (data.type === "video_created") {
-        // If we are on the first page and sorted by latest, we can add it
         if (currentPage === 1 && order === "created_at_desc") {
           videos = [data.payload, ...videos.slice(0, limit - 1)];
           totalCount++;
           totalPages = Math.ceil(totalCount / limit);
         } else {
-          // Otherwise just update count
           totalCount++;
           totalPages = Math.ceil(totalCount / limit);
         }
@@ -156,7 +143,7 @@
     const currentSearch = search;
     const handler = setTimeout(() => {
       debouncedSearch = currentSearch;
-      currentPage = 1; // Reset to page 1 on search
+      currentPage = 1;
     }, 300);
 
     return () => clearTimeout(handler);
@@ -167,7 +154,6 @@
     fetchVideos(debouncedSearch, order, currentPage);
   });
 
-  let copiedId = $state<string | null>(null);
   function copyToClipboard(text: string, id: string) {
     navigator.clipboard.writeText(text);
     copiedId = id;
@@ -180,38 +166,8 @@
     if (!confirm("Are you sure you want to delete this video?")) return;
     try {
       await videosApi.deleteVideo(id);
-      // WebSocket will handle video_deleted event
     } catch (e) {
       console.error("Error deleting video", e);
-    }
-  }
-
-  onMount(() => {
-    connectWebSocket();
-
-    return () => {
-      if (ws) ws.close();
-    };
-  });
-
-  function getProgress(id: string) {
-    return progressMap[id];
-  }
-
-  let activeVideoId: string | null = $state(null);
-
-  function getStatusColor(status: string) {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      case "downloading":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      case "encoding":
-        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "error":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      default:
-        return "bg-slate-500/10 text-slate-500 border-slate-500/20";
     }
   }
 
@@ -222,382 +178,54 @@
       activeVideoId = id;
     }
   }
+
+  function handleOrderChange() {
+    currentPage = 1;
+  }
+
+  function handlePageChange(page: number) {
+    fetchVideos(debouncedSearch, order, page);
+  }
+
+  onMount(() => {
+    connectWebSocket();
+
+    return () => {
+      if (ws) ws.close();
+    };
+  });
 </script>
 
 <div class="space-y-10">
-  <div
-    class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between"
-  >
-    <div>
-      <h1 class="text-4xl font-extrabold tracking-tight">Library</h1>
-      <p class="mt-1 text-lg text-muted-foreground font-medium">
-        Your downloaded collection ({totalCount} videos).
-      </p>
-    </div>
-    <Button.Root
-      href="/download"
-      size="lg"
-      class="rounded-2xl px-6 py-6 text-base font-bold shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
-    >
-      <Plus class="mr-2 h-5 w-5 stroke-[3px]" />
-      Download New
-    </Button.Root>
-  </div>
+  <PageHeader {totalCount} />
 
-  <div
-    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-6 rounded-[2rem] border shadow-sm"
-  >
-    <div class="relative flex-1 max-w-md">
-      <Search
-        class="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-      />
-      <Input
-        type="text"
-        placeholder="Search videos..."
-        bind:value={search}
-        class="h-12 rounded-xl pl-12 pr-12 bg-muted/50 border-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
-      />
-      {#if isLoading}
-        <div class="absolute right-4 top-1/2 -translate-y-1/2">
-          <Loader class="h-5 w-5 animate-spin text-primary" />
-        </div>
-      {/if}
-    </div>
-    <div class="flex items-center gap-3">
-      <SortAsc class="h-5 w-5 text-muted-foreground" />
-      <Select.Root
-        type="single"
-        bind:value={order}
-        onValueChange={() => (currentPage = 1)}
-      >
-        <Select.Trigger
-          class="h-12 min-w-[180px] rounded-xl bg-muted/50 border-none font-bold"
-        >
-          {order.replace("_", " ").toUpperCase()}
-        </Select.Trigger>
-        <Select.Content class="rounded-xl border shadow-xl">
-          <Select.Item value="created_at_desc">Latest First</Select.Item>
-          <Select.Item value="created_at_asc">Oldest First</Select.Item>
-          <Select.Item value="name_asc">Name A-Z</Select.Item>
-          <Select.Item value="name_desc">Name Z-A</Select.Item>
-          <Select.Item value="status_asc">Status A-Z</Select.Item>
-          <Select.Item value="status_desc">Status Z-A</Select.Item>
-        </Select.Content>
-      </Select.Root>
-    </div>
-  </div>
+  <SearchSortBar
+    bind:search
+    bind:order
+    {isLoading}
+    onOrderChange={handleOrderChange}
+  />
 
-  <div class="grid grid-cols-1 gap-8">
-    {#each videos as video (video.id)}
-      {@const prog = video.id ? getProgress(video.id) : undefined}
-      {@const currentStatus = prog?.status || video.downloadStatus || "unknown"}
-      {@const isProcessing = ["downloading", "encoding", "pending"].includes(
-        currentStatus.toLowerCase(),
-      )}
-      {@const isCompleted = currentStatus.toLowerCase() === "completed"}
-      {@const isActive = activeVideoId === video.id}
+  <VideosGrid
+    {videos}
+    {progressMap}
+    {activeVideoId}
+    {copiedId}
+    {editingId}
+    bind:editingName
+    onTogglePlay={togglePlay}
+    onStartEditing={startEditing}
+    onCancelEditing={cancelEditing}
+    onRename={renameVideo}
+    onDelete={deleteVideo}
+    onCopyId={copyToClipboard}
+  />
 
-      <div
-        class="group relative flex flex-col overflow-hidden rounded-[2rem] border bg-card transition-all hover:shadow-2xl hover:shadow-primary/5"
-      >
-        {#if isActive && isCompleted}
-          <div class="aspect-video w-full overflow-hidden bg-black">
-            <!-- svelte-ignore a11y_media_has_caption -->
-            <video
-              src={`/downloads/${video.fileName}`}
-              controls
-              autoplay
-              playsinline
-              preload="metadata"
-              class="h-full w-full object-contain"
-            >
-            </video>
-          </div>
-        {:else}
-          <button
-            class="relative aspect-video w-full overflow-hidden bg-black transition-all hover:cursor-pointer"
-            onclick={() => isCompleted && video.id && togglePlay(video.id)}
-            disabled={!isCompleted}
-          >
-            {#if video.thumbnailFileName}
-              <img
-                src={`/downloads/${video.thumbnailFileName}`}
-                alt={video.name}
-                class="h-full w-full object-contain transition-transform duration-700 group-hover:scale-110"
-              />
-            {:else}
-              <div
-                class="flex h-full items-center justify-center text-muted-foreground"
-              >
-                <HardDrive class="h-12 w-12 opacity-20" />
-              </div>
-            {/if}
-
-            <div class="absolute top-4 right-4">
-              <Badge
-                variant="outline"
-                class={`px-3 py-1 rounded-full border-none font-bold backdrop-blur-md ${getStatusColor(currentStatus)}`}
-              >
-                {currentStatus.toUpperCase()}
-              </Badge>
-            </div>
-
-            {#if isCompleted}
-              <div
-                class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-all duration-300 group-hover:bg-black/40 group-hover:opacity-100"
-              >
-                <div
-                  class="rounded-full bg-white p-5 text-black shadow-2xl transition-transform duration-300 hover:scale-110 active:scale-90"
-                >
-                  <Play class="h-8 w-8 fill-current" />
-                </div>
-              </div>
-            {/if}
-          </button>
-        {/if}
-
-        <div class="flex flex-1 flex-col p-6 sm:p-8 min-w-0">
-          <div class="flex items-start justify-between gap-6">
-            <div class="space-y-1 min-w-0 flex-1">
-              {#if editingId === video.id}
-                <div class="flex items-center gap-2">
-                  <Input
-                    bind:value={editingName}
-                    class="h-10 rounded-lg bg-muted/50 border-primary/20 focus-visible:ring-primary/20"
-                    autofocus
-                    onkeydown={(e) => {
-                      if (e.key === "Enter") renameVideo(video.id!);
-                      if (e.key === "Escape") cancelEditing();
-                    }}
-                  />
-                  <Button.Root
-                    variant="ghost"
-                    size="icon"
-                    onclick={() => renameVideo(video.id!)}
-                    class="h-10 w-10 shrink-0 text-green-600 hover:bg-green-500/10 hover:cursor-pointer"
-                  >
-                    <Save class="h-5 w-5" />
-                  </Button.Root>
-                  <Button.Root
-                    variant="ghost"
-                    size="icon"
-                    onclick={cancelEditing}
-                    class="h-10 w-10 shrink-0 text-muted-foreground hover:bg-muted hover:cursor-pointer"
-                  >
-                    <X class="h-5 w-5" />
-                  </Button.Root>
-                </div>
-              {:else}
-                <h3
-                  class="text-xl font-bold leading-tight tracking-tight sm:text-2xl line-clamp-2"
-                  title={video.name}
-                >
-                  {video.name || "Untitled Video"}
-                </h3>
-              {/if}
-
-              {#if video.id}
-                <button
-                  onclick={() => copyToClipboard(video.id!, video.id!)}
-                  class="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-primary transition-colors group/guid"
-                >
-                  <span class="truncate max-w-[150px]">{video.id}</span>
-                  {#if copiedId === video.id}
-                    <Check class="h-3 w-3 text-green-500" />
-                  {:else}
-                    <Copy
-                      class="h-3 w-3 opacity-0 group-hover/guid:opacity-100"
-                    />
-                  {/if}
-                </button>
-              {/if}
-            </div>
-            <div class="grid grid-cols-2 gap-2 shrink-0">
-              {#if editingId !== video.id}
-                <Button.Root
-                  variant="secondary"
-                  size="icon"
-                  onclick={() => startEditing(video)}
-                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
-                >
-                  <Pencil class="h-5 w-5" />
-                </Button.Root>
-              {/if}
-              {#if isCompleted}
-                <Button.Root
-                  variant="secondary"
-                  size="icon"
-                  onclick={() =>
-                    window.open(`/downloads/${video.fileName}`, "_blank")}
-                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
-                >
-                  <ExternalLink class="h-5 w-5" />
-                </Button.Root>
-                <Button.Root
-                  variant="secondary"
-                  size="icon"
-                  href={`/downloads/${video.fileName}`}
-                  download={video.fileName}
-                  disabled={video.downloadStatus !== "completed"}
-                  class="h-11 w-11 rounded-2xl hover:cursor-pointer"
-                >
-                  <Download class="h-5 w-5" />
-                </Button.Root>
-              {/if}
-              <Button.Root
-                variant="secondary"
-                size="icon"
-                onclick={() => video.id && deleteVideo(video.id)}
-                class="h-11 w-11 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive hover:cursor-pointer"
-              >
-                <Trash2 class="h-5 w-5" />
-              </Button.Root>
-            </div>
-          </div>
-
-          <div class="mt-6">
-            {#if isProcessing}
-              <div class="space-y-3">
-                <div
-                  class="flex items-center justify-between text-sm font-bold"
-                >
-                  <span class="flex items-center gap-2">
-                    {#if currentStatus.toLowerCase() === "encoding"}
-                      <div class="relative flex h-3 w-3">
-                        <span
-                          class="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75"
-                        ></span>
-                        <span
-                          class="relative inline-flex h-3 w-3 rounded-full bg-yellow-500"
-                        ></span>
-                      </div>
-                      <span
-                        class="text-yellow-600 dark:text-yellow-500 uppercase tracking-wider text-xs"
-                        >Encoding...</span
-                      >
-                    {:else}
-                      <div class="relative flex h-3 w-3">
-                        <span
-                          class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"
-                        ></span>
-                        <span
-                          class="relative inline-flex h-3 w-3 rounded-full bg-blue-500"
-                        ></span>
-                      </div>
-                      <span
-                        class="text-blue-600 dark:text-blue-500 uppercase tracking-wider text-xs"
-                        >{prog?.speed || "Downloading..."}</span
-                      >
-                    {/if}
-                  </span>
-                  <span class="text-lg tabular-nums">
-                    {(currentStatus.toLowerCase() === "encoding"
-                      ? prog?.encodingPercent
-                      : prog?.percent
-                    )?.toFixed(0) || 0}%
-                  </span>
-                </div>
-                <Progress
-                  value={(currentStatus.toLowerCase() === "encoding"
-                    ? prog?.encodingPercent
-                    : prog?.percent) || 0}
-                  class="h-3 rounded-full"
-                />
-                {#if prog?.eta}
-                  <p
-                    class="text-right text-xs font-medium text-muted-foreground"
-                  >
-                    ETA: {prog.eta}
-                  </p>
-                {/if}
-              </div>
-            {:else}
-              <div
-                class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-              >
-                <Clock class="h-4 w-4" />
-                <span
-                  >Added {new Date(video.createdAt || "").toLocaleDateString(
-                    undefined,
-                    { month: "short", day: "numeric", year: "numeric" },
-                  )}</span
-                >
-              </div>
-            {/if}
-          </div>
-        </div>
-      </div>
-    {/each}
-  </div>
-
-  {#if totalPages > 1}
-    <div class="flex justify-center mt-12 pb-12">
-      <Pagination.Root
-        count={totalCount}
-        perPage={limit}
-        bind:page={currentPage}
-      >
-        {#snippet children({ pages })}
-          <Pagination.Content>
-            <Pagination.Item>
-              <Pagination.PrevButton
-                onclick={() =>
-                  fetchVideos(debouncedSearch, order, currentPage - 1)}
-              >
-                <ChevronLeft class="h-4 w-4" />
-                <span class="hidden sm:inline">Previous</span>
-              </Pagination.PrevButton>
-            </Pagination.Item>
-            {#each pages as page (page.key)}
-              {#if page.type === "ellipsis"}
-                <Pagination.Item>
-                  <Pagination.Ellipsis />
-                </Pagination.Item>
-              {:else}
-                <Pagination.Item>
-                  <Pagination.Link
-                    {page}
-                    isActive={currentPage === page.value}
-                    onclick={() =>
-                      fetchVideos(debouncedSearch, order, page.value)}
-                  >
-                    {page.value}
-                  </Pagination.Link>
-                </Pagination.Item>
-              {/if}
-            {/each}
-            <Pagination.Item>
-              <Pagination.NextButton
-                onclick={() =>
-                  fetchVideos(debouncedSearch, order, currentPage + 1)}
-              >
-                <span class="hidden sm:inline">Next</span>
-                <ChevronRight class="h-4 w-4" />
-              </Pagination.NextButton>
-            </Pagination.Item>
-          </Pagination.Content>
-        {/snippet}
-      </Pagination.Root>
-    </div>
-  {/if}
-
-  {#if videos.length === 0}
-    <div
-      class="flex min-h-[400px] flex-col items-center justify-center rounded-[3rem] border-2 border-dashed p-12 text-center animate-in fade-in zoom-in duration-500"
-    >
-      <div class="rounded-3xl bg-muted p-6">
-        <Download class="h-12 w-12 text-muted-foreground opacity-50" />
-      </div>
-      <h2 class="mt-6 text-2xl font-bold tracking-tight">
-        Your library is empty
-      </h2>
-      <p class="mt-2 text-muted-foreground max-w-[250px] mx-auto">
-        Start by downloading your first video to see it here.
-      </p>
-      <Button.Root href="/download" size="lg" class="mt-8 rounded-2xl">
-        <Plus class="mr-2 h-5 w-5" />
-        Download New Video
-      </Button.Root>
-    </div>
-  {/if}
+  <VideosPagination
+    {totalCount}
+    {totalPages}
+    bind:currentPage
+    {limit}
+    onPageChange={handlePageChange}
+  />
 </div>

@@ -1,12 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { videosApi } from "$lib/api-client";
-  import * as Card from "$lib/components/ui/card/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
   import * as Select from "$lib/components/ui/select/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
-  import { Skeleton } from "$lib/components/ui/skeleton/index.js";
   import type {
     HandlersMetadataRequest,
     ServicesVideoMetadata,
@@ -18,12 +15,11 @@
     ArrowLeft,
     Info,
     Youtube,
-    FileVideo,
+    FilePlay,
     Clock,
     Type,
     X,
   } from "@lucide/svelte";
-  import { Separator } from "$lib/components/ui/separator/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
 
   let url = $state("");
@@ -161,480 +157,300 @@
     </p>
   </div>
 
-  	  <div class="space-y-6">
-
-  	    <div
-  	      class="relative overflow-hidden rounded-[2.5rem] border bg-card p-2 shadow-2xl shadow-primary/5 transition-all focus-within:ring-2 focus-within:ring-primary/20"
-  	    >
-  	      <div class="flex flex-col gap-2 sm:flex-row">
-  	        <div class="relative flex-1">
-  	          <Search
-  	            class="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-  	          />
-  	          <input
-  	            type="text"
-  	            bind:value={url}
-  	            placeholder="Paste URL here..."
-  	            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-4 text-lg font-medium focus:outline-none focus:ring-0"
-  	            disabled={loading}
-  	            onkeydown={(e) =>
-  	              e.key === "Enter" &&
-  	              (metadata ? startDownload() : checkMetadata())}
-  	          />
-  	        </div>
-  	        <Button.Root
-  	          onclick={checkMetadata}
-  	          disabled={loading || !url}
-  	          variant="secondary"
-  	          class="h-16 rounded-[2rem] px-8 text-lg font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-  	        >
-  	          {loading && !metadata ? "Analysing..." : "Fetch Info"}
-  	        </Button.Root>
-  	      </div>
-  	    </div>
-
-  	    {#if isPlaylist}
-  	      <div
-  	        class="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-4 text-amber-600 border border-amber-500/20 animate-in slide-in-from-top-2 duration-300"
-  	      >
-  	        <Info class="h-5 w-5 shrink-0" />
-  	        <span class="text-sm font-bold"
-  	          >Playlist detected. Only the first video will be downloaded.</span
-  	        >
-  	      </div>
-  	    {/if}
-  	  </div>
-
-  	
-
-  	  {#if error}
-
-  	    <div
-
-  	      class="flex items-center gap-4 rounded-[2rem] bg-destructive/10 p-6 text-destructive border border-destructive/20 animate-in zoom-in-95 duration-300"
-
-  	    >
-
-  	      <div class="rounded-full bg-destructive/20 p-2">
-
-  	        <Info class="h-6 w-6" />
-
-  	      </div>
-
-  	      <span class="font-bold text-lg">{error}</span>
-
-  	    </div>
-
-  	  {/if}
-
-  	
-
-  	  {#if loading && !metadata}
-
-  	    <div
-
-  	      class="overflow-hidden rounded-[2.5rem] border bg-card p-8 animate-pulse"
-
-  	    >
-
-  	      <div class="flex flex-col gap-8 sm:flex-row">
-
-  	        <div
-
-  	          class="aspect-video w-full rounded-[1.5rem] bg-muted sm:w-72"
-
-  	        ></div>
-
-  	        <div class="flex-1 space-y-4">
-
-  	          <div class="h-8 w-3/4 rounded-full bg-muted"></div>
-
-  	          <div class="space-y-3">
-
-  	            <div class="h-4 w-full rounded-full bg-muted"></div>
-
-  	            <div class="h-4 w-full rounded-full bg-muted"></div>
-
-  	            <div class="h-4 w-2/3 rounded-full bg-muted"></div>
-
-  	          </div>
-
-  	        </div>
-
-  	      </div>
-
-  	    </div>
-
-  	  {/if}
-
-  	
-
-  	  {#if metadata}
-
-  	    <div
-
-  	      class="group relative overflow-hidden rounded-[2.5rem] border bg-card shadow-2xl shadow-primary/5 transition-all animate-in zoom-in-95 slide-in-from-top-4 duration-500"
-
-  	    >
-
-  	      <div class="p-8 space-y-10">
-
-  	        <div class="flex flex-col gap-8 sm:flex-row">
-
-  	          {#if metadata.thumbnail}
-
-  	            <div
-
-  	              class="relative aspect-video w-full shrink-0 overflow-hidden rounded-[1.5rem] border shadow-2xl sm:w-72"
-
-  	            >
-
-  	              <img
-
-  	                src={metadata.thumbnail}
-
-  	                alt={metadata.title}
-
-  	                class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-
-  	              />
-
-  	            </div>
-
-  	          {/if}
-
-  	            	          <div class="space-y-4 min-w-0">
-
-  	            	            <h3
-
-  	            	              class="text-2xl font-black leading-tight tracking-tight sm:text-3xl line-clamp-2"
-
-  	            	            >
-
-  	            	              {metadata.title}
-
-  	            	            </h3>
-
-  	            <p
-
-  	              class="text-base text-muted-foreground line-clamp-3 leading-relaxed font-medium"
-
-  	            >
-
-  	              {metadata.description}
-
-  	            </p>
-
-  	            <div class="flex flex-wrap gap-3">
-
-  	              <div
-
-  	                class="flex items-center text-sm font-bold bg-muted px-4 py-2 rounded-full"
-
-  	              >
-
-  	                <Clock class="mr-2 h-4 w-4" />
-
-  	                {metadata.duration
-
-  	                  ? (metadata.duration / 60).toFixed(1) + " min"
-
-  	                  : "Unknown"}
-
-  	              </div>
-
-  	              {#if url.includes("youtube.com") || url.includes("youtu.be")}
-
-  	                <div
-
-  	                  class="flex items-center text-sm font-bold bg-red-500/10 text-red-500 px-4 py-2 rounded-full border border-red-500/10"
-
-  	                >
-
-  	                  <Youtube class="mr-2 h-4 w-4" />
-
-  	                  YouTube
-
-  	                </div>
-
-  	              {/if}
-
-  	            </div>
-
-  	          </div>
-
-  	        </div>
-
-  	
-
-  	        <div class="space-y-4">
-
-  	          <div class="flex items-center justify-between px-2">
-
-  	            <Label for="quality" class="text-lg font-bold"
-
-  	              >Override Quality</Label
-
-  	            >
-
-  	            <span
-
-  	              class="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-60"
-
-  	              >Optional</span
-
-  	            >
-
-  	          </div>
-
-  	          <Select.Root type="single" bind:value={selectedFormatId}>
-
-  	            <Select.Trigger
-
-  	              id="quality"
-
-  	              class="h-16 w-full rounded-[2rem] border-2 bg-muted/30 px-6 text-lg font-bold transition-all hover:bg-muted/50 focus:ring-primary/20"
-
-  	            >
-
-  	              {selectedFormatLabel}
-
-  	            </Select.Trigger>
-
-  	            <Select.Content
-
-  	              class="rounded-[2.5rem] border-2 p-3 shadow-2xl min-w-[320px]"
-
-  	            >
-
-  	              <div class="mb-3 px-2">
-
-  	                <div class="relative">
-
-  	                  <Search
-
-  	                    class="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-50"
-
-  	                  />
-
-  	                  <input
-
-  	                    type="text"
-
-  	                    bind:value={searchQuery}
-
-  	                    placeholder="Search quality (e.g. 1080p)..."
-
-  	                    class="h-12 w-full rounded-2xl bg-muted/50 pl-11 pr-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
-
-  	                    onpointerdown={(e) => e.stopPropagation()}
-
-  	                    onkeydown={(e) => e.stopPropagation()}
-
-  	                  />
-
-  	                </div>
-
-  	              </div>
-
-  	              <div class="max-h-[350px] overflow-y-auto pr-1">
-
-  	                <Select.Item
-
-  	                  value=""
-
-  	                  class="rounded-2xl py-4 px-5 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1"
-
-  	                >
-
-  	                  <div class="flex items-center justify-between w-full">
-
-  	                    <div class="flex flex-col gap-0.5">
-
-  	                      <span class="text-base">Best Quality</span>
-
-  	                      <span
-
-  	                        class="text-[10px] opacity-70 font-medium tracking-wide uppercase"
-
-  	                        >Automatic Selection</span
-
-  	                      >
-
-  	                    </div>
-
-  	                    <div class="text-right">
-
-  	                      <span
-
-  	                        class="text-xs font-black opacity-40 uppercase tracking-widest"
-
-  	                        >Default</span
-
-  	                      >
-
-  	                    </div>
-
-  	                  </div>
-
-  	                </Select.Item>
-
-  	                {#if filteredOptions.length > 0}
-
-  	                  {#each filteredOptions as option}
-
-  	                    <Select.Item
-
-  	                      value={option.format_id || ""}
-
-  	                      class="rounded-2xl py-4 px-5 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1 last:mb-0"
-
-  	                    >
-
-  	                      <div class="flex items-center justify-between w-full">
-
-  	                        <div class="flex flex-col gap-0.5">
-
-  	                          <span class="text-base"
-
-  	                            >{option.resolution} •
-
-  	                            <span class="uppercase opacity-60 text-xs"
-
-  	                              >{option.extension}</span
-
-  	                            ></span
-
-  	                          >
-
-  	                          <span
-
-  	                            class="text-[10px] opacity-70 font-medium tracking-wide uppercase"
-
-  	                            >{option.note || "Standard"}</span
-
-  	                          >
-
-  	                        </div>
-
-  	                        <div class="text-right">
-
-  	                          <span class="text-sm font-black tabular-nums"
-
-  	                            >{formatFileSize(option.file_size)}</span
-
-  	                          >
-
-  	                        </div>
-
-  	                      </div>
-
-  	                    </Select.Item>
-
-  	                  {/each}
-
-  	                {:else}
-
-  	                  <div class="py-12 text-center text-muted-foreground">
-
-  	                    <FileVideo class="mx-auto h-8 w-8 opacity-20 mb-3" />
-
-  	                    <p class="text-sm font-bold">No formats found</p>
-
-  	                  </div>
-
-  	                {/if}
-
-  	              </div>
-
-  	            </Select.Content>
-
-  	          </Select.Root>
-
-  	          <div class="flex items-center justify-between px-2 pt-6 border-t border-muted">
-                <div class="space-y-0.5">
-                  <Label class="text-lg font-bold">Re-encode to H.264</Label>
-                  <p class="text-sm text-muted-foreground font-medium">
-                    Ensures compatibility but takes longer
-                  </p>
-                </div>
-                <Switch bind:checked={reEncode} aria-label="Toggle re-encoding" />
+  <div class="space-y-6">
+    <div
+      class="relative overflow-hidden rounded-[2.5rem] border bg-card p-2 shadow-2xl shadow-primary/5 transition-all focus-within:ring-2 focus-within:ring-primary/20"
+    >
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <div class="relative flex-1">
+          <Search
+            class="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            bind:value={url}
+            placeholder="Paste URL here..."
+            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-4 text-lg font-medium focus:outline-none focus:ring-0"
+            disabled={loading}
+            onkeydown={(e) =>
+              e.key === "Enter" &&
+              (metadata ? startDownload() : checkMetadata())}
+          />
+        </div>
+        <Button.Root
+          onclick={checkMetadata}
+          disabled={loading || !url}
+          variant="secondary"
+          class="h-16 rounded-[2rem] px-8 text-lg font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+        >
+          {loading && !metadata ? "Analysing..." : "Fetch Info"}
+        </Button.Root>
+      </div>
+    </div>
+
+    {#if isPlaylist}
+      <div
+        class="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-4 text-amber-600 border border-amber-500/20 animate-in slide-in-from-top-2 duration-300"
+      >
+        <Info class="h-5 w-5 shrink-0" />
+        <span class="text-sm font-bold"
+          >Playlist detected. Only the first video will be downloaded.</span
+        >
+      </div>
+    {/if}
+  </div>
+
+  {#if error}
+    <div
+      class="flex items-center gap-4 rounded-[2rem] bg-destructive/10 p-6 text-destructive border border-destructive/20 animate-in zoom-in-95 duration-300"
+    >
+      <div class="rounded-full bg-destructive/20 p-2">
+        <Info class="h-6 w-6" />
+      </div>
+
+      <span class="font-bold text-lg">{error}</span>
+    </div>
+  {/if}
+
+  {#if loading && !metadata}
+    <div
+      class="overflow-hidden rounded-[2.5rem] border bg-card p-8 animate-pulse"
+    >
+      <div class="flex flex-col gap-8 sm:flex-row">
+        <div
+          class="aspect-video w-full rounded-[1.5rem] bg-muted sm:w-72"
+        ></div>
+
+        <div class="flex-1 space-y-4">
+          <div class="h-8 w-3/4 rounded-full bg-muted"></div>
+
+          <div class="space-y-3">
+            <div class="h-4 w-full rounded-full bg-muted"></div>
+
+            <div class="h-4 w-full rounded-full bg-muted"></div>
+
+            <div class="h-4 w-2/3 rounded-full bg-muted"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if metadata}
+    <div
+      class="group relative overflow-hidden rounded-[2.5rem] border bg-card shadow-2xl shadow-primary/5 transition-all animate-in zoom-in-95 slide-in-from-top-4 duration-500"
+    >
+      <div class="p-8 space-y-10">
+        <div class="flex flex-col gap-8 sm:flex-row">
+          {#if metadata.thumbnail}
+            <div
+              class="relative aspect-video w-full shrink-0 overflow-hidden rounded-[1.5rem] border shadow-2xl sm:w-72"
+            >
+              <img
+                src={metadata.thumbnail}
+                alt={metadata.title}
+                class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+            </div>
+          {/if}
+
+          <div class="space-y-4 min-w-0">
+            <h3
+              class="text-2xl font-black leading-tight tracking-tight sm:text-3xl line-clamp-2"
+            >
+              {metadata.title}
+            </h3>
+
+            <p
+              class="text-base text-muted-foreground line-clamp-3 leading-relaxed font-medium"
+            >
+              {metadata.description}
+            </p>
+
+            <div class="flex flex-wrap gap-3">
+              <div
+                class="flex items-center text-sm font-bold bg-muted px-4 py-2 rounded-full"
+              >
+                <Clock class="mr-2 h-4 w-4" />
+
+                {metadata.duration
+                  ? (metadata.duration / 60).toFixed(1) + " min"
+                  : "Unknown"}
               </div>
-  	        </div>
 
-  	      </div>
-
-  	    </div>
-
-  	
-
-  	    <div
-
-  	      class="space-y-6 animate-in slide-in-from-top-4 duration-500 delay-150"
-
-  	    >
-
-  	      <div
-
-  	        class="relative overflow-hidden rounded-[2.5rem] border bg-card p-2 shadow-2xl shadow-primary/5 transition-all focus-within:ring-2 focus-within:ring-primary/20"
-
-  	      >
-
-  	        <div class="relative">
-
-  	          <Type
-
-  	            class="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-
-  	          />
-
-  	          <input
-
-  	            type="text"
-
-  	            bind:value={customName}
-
-  	            placeholder="Video Name (Optional)"
-
-  	            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-14 text-lg font-medium focus:outline-none focus:ring-0"
-
-  	            disabled={loading}
-
-  	          />
-
-              {#if customName}
-                <button
-                  onclick={() => customName = ""}
-                  class="absolute right-6 top-1/2 -translate-y-1/2 rounded-full p-2 hover:bg-muted transition-colors"
-                  aria-label="Clear name"
+              {#if url.includes("youtube.com") || url.includes("youtu.be")}
+                <div
+                  class="flex items-center text-sm font-bold bg-red-500/10 text-red-500 px-4 py-2 rounded-full border border-red-500/10"
                 >
-                  <X class="h-5 w-5 text-muted-foreground" />
-                </button>
+                  <Youtube class="mr-2 h-4 w-4" />
+
+                  YouTube
+                </div>
               {/if}
+            </div>
+          </div>
+        </div>
 
-  	        </div>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between px-2">
+            <Label for="quality" class="text-lg font-bold"
+              >Override Quality</Label
+            >
 
-  	      </div>
+            <span
+              class="text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-60"
+              >Optional</span
+            >
+          </div>
 
-  	
+          <Select.Root type="single" bind:value={selectedFormatId}>
+            <Select.Trigger
+              id="quality"
+              class="h-16 w-full rounded-[2rem] border-2 bg-muted/30 px-6 text-lg font-bold transition-all hover:bg-muted/50 focus:ring-primary/20"
+            >
+              {selectedFormatLabel}
+            </Select.Trigger>
 
-  	      <Button.Root
+            <Select.Content
+              class="rounded-[2.5rem] border-2 p-3 shadow-2xl min-w-[320px]"
+            >
+              <div class="mb-3 px-2">
+                <div class="relative">
+                  <Search
+                    class="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-50"
+                  />
 
-  	        onclick={startDownload}
+                  <input
+                    type="text"
+                    bind:value={searchQuery}
+                    placeholder="Search quality (e.g. 1080p)..."
+                    class="h-12 w-full rounded-2xl bg-muted/50 pl-11 pr-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    onpointerdown={(e) => e.stopPropagation()}
+                    onkeydown={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
 
-  	        disabled={loading || !url}
+              <div class="max-h-[350px] overflow-y-auto pr-1">
+                <Select.Item
+                  value=""
+                  class="rounded-2xl py-4 px-5 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1"
+                >
+                  <div class="flex items-center justify-between w-full">
+                    <div class="flex flex-col gap-0.5">
+                      <span class="text-base">Best Quality</span>
 
-  	        class="h-20 w-full rounded-[2.5rem] text-2xl font-black shadow-2xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                      <span
+                        class="text-[10px] opacity-70 font-medium tracking-wide uppercase"
+                        >Automatic Selection</span
+                      >
+                    </div>
 
-  	      >
+                    <div class="text-right">
+                      <span
+                        class="text-xs font-black opacity-40 uppercase tracking-widest"
+                        >Default</span
+                      >
+                    </div>
+                  </div>
+                </Select.Item>
 
-  	        <Download class="mr-3 h-8 w-8 stroke-[3px]" />
+                {#if filteredOptions.length > 0}
+                  {#each filteredOptions as option}
+                    <Select.Item
+                      value={option.format_id || ""}
+                      class="rounded-2xl py-4 px-5 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1 last:mb-0"
+                    >
+                      <div class="flex items-center justify-between w-full">
+                        <div class="flex flex-col gap-0.5">
+                          <span class="text-base"
+                            >{option.resolution} •
 
-  	        Start Download
+                            <span class="uppercase opacity-60 text-xs"
+                              >{option.extension}</span
+                            ></span
+                          >
 
-  	      </Button.Root>
+                          <span
+                            class="text-[10px] opacity-70 font-medium tracking-wide uppercase"
+                            >{option.note || "Standard"}</span
+                          >
+                        </div>
 
-  	    </div>
+                        <div class="text-right">
+                          <span class="text-sm font-black tabular-nums"
+                            >{formatFileSize(option.file_size)}</span
+                          >
+                        </div>
+                      </div>
+                    </Select.Item>
+                  {/each}
+                {:else}
+                  <div class="py-12 text-center text-muted-foreground">
+                    <FilePlay class="mx-auto h-8 w-8 opacity-20 mb-3" />
 
-  	  {/if}
+                    <p class="text-sm font-bold">No formats found</p>
+                  </div>
+                {/if}
+              </div>
+            </Select.Content>
+          </Select.Root>
+
+          <div
+            class="flex items-center justify-between px-2 pt-6 border-t border-muted"
+          >
+            <div class="space-y-0.5">
+              <Label class="text-lg font-bold">Re-encode to H.264</Label>
+              <p class="text-sm text-muted-foreground font-medium">
+                Ensures compatibility but takes longer
+              </p>
+            </div>
+            <Switch bind:checked={reEncode} aria-label="Toggle re-encoding" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="space-y-6 animate-in slide-in-from-top-4 duration-500 delay-150"
+    >
+      <div
+        class="relative overflow-hidden rounded-[2.5rem] border bg-card p-2 shadow-2xl shadow-primary/5 transition-all focus-within:ring-2 focus-within:ring-primary/20"
+      >
+        <div class="relative">
+          <Type
+            class="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+          />
+
+          <input
+            type="text"
+            bind:value={customName}
+            placeholder="Video Name (Optional)"
+            class="h-16 w-full rounded-[2rem] border-none bg-transparent pl-14 pr-14 text-lg font-medium focus:outline-none focus:ring-0"
+            disabled={loading}
+          />
+
+          {#if customName}
+            <button
+              onclick={() => (customName = "")}
+              class="absolute right-6 top-1/2 -translate-y-1/2 rounded-full p-2 hover:bg-muted transition-colors"
+              aria-label="Clear name"
+            >
+              <X class="h-5 w-5 text-muted-foreground" />
+            </button>
+          {/if}
+        </div>
+      </div>
+
+      <Button.Root
+        onclick={startDownload}
+        disabled={loading || !url}
+        class="h-20 w-full rounded-[2.5rem] text-2xl font-black shadow-2xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
+      >
+        <Download class="mr-3 h-8 w-8 stroke-[3px]" />
+
+        Start Download
+      </Button.Root>
+    </div>
+  {/if}
 </div>
