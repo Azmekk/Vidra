@@ -7,4 +7,4 @@ git fetch && git pull
 docker compose pull
 
 # Restart the containers
-docker compose up -d
+docker compose up -d --remove-orphans
