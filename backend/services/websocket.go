@@ -17,8 +17,8 @@ var upgrader = websocket.Upgrader{
 }
 
 type WsEvent struct {
-	Type    string      `json:"type"`
-	Payload interface{} `json:"payload"`
+	Type    string `json:"type"`
+	Payload any    `json:"payload"`
 }
 
 type WebSocketService struct {
