@@ -114,14 +114,14 @@ type DownloaderService struct {
 	progress sync.Map // map[string]*DownloadProgress
 	queries  *database.Queries
 	ws       *WebSocketService
-	settings *SettingsService
+	ytdlp    *YtdlpService
 }
 
-func NewDownloaderService(queries *database.Queries, ws *WebSocketService, settings *SettingsService) *DownloaderService {
+func NewDownloaderService(queries *database.Queries, ws *WebSocketService, ytdlp *YtdlpService) *DownloaderService {
 	return &DownloaderService{
-		queries:  queries,
-		ws:       ws,
-		settings: settings,
+		queries: queries,
+		ws:      ws,
+		ytdlp:   ytdlp,
 	}
 }
 
@@ -162,18 +162,13 @@ func (s *DownloaderService) DeleteVideoFiles(fileName, thumbnailFileName string)
 }
 
 func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "yt-dlp", "-U")
+	cmd := s.ytdlp.UpdateCommand(ctx)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
 
 func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
-	args := []string{"--dump-json", "--flat-playlist", "--no-warnings"}
-	if proxyURL := s.settings.GetProxyURL(ctx); proxyURL != "" {
-		args = append(args, "--proxy", proxyURL)
-	}
-	args = append(args, url)
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	cmd := s.ytdlp.MetadataCommand(ctx, url)
 	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
 
 	var stderr bytes.Buffer
@@ -280,12 +275,12 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		log.Printf("INFO [%s]: Starting yt-dlp download with format: %s\n", idStr, f)
 		prog.Update(s.ws, idStr, 0, 0, "", "", StatusDownloading, "Starting download...")
 
-		args := []string{"-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline"}
-		if proxyURL := s.settings.GetProxyURL(context.Background()); proxyURL != "" {
-			args = append(args, "--proxy", proxyURL)
-		}
-		args = append(args, url)
-		cmd := exec.Command("yt-dlp", args...)
+		cmd := s.ytdlp.DownloadCommand(context.Background(), url, YtdlpDownloadOptions{
+			FormatID:          f,
+			OutputPattern:     tempPathPattern,
+			WriteThumbnail:    true,
+			ConvertThumbnails: "jpg",
+		})
 		log.Printf("DEBUG [%s]: Executing command: %s\n", idStr, cmd.String())
 		var fullOutput bytes.Buffer
 

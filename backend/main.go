@@ -36,7 +36,8 @@ func main() {
 	go wsService.Run()
 
 	settingsService := services.NewSettingsService(queries)
-	downloader := services.NewDownloaderService(queries, wsService, settingsService)
+	ytdlpService := services.NewYtdlpService(settingsService)
+	downloader := services.NewDownloaderService(queries, wsService, ytdlpService)
 	videoHandler := handlers.NewVideoHandler(queries, downloader, wsService)
 	errorHandler := handlers.NewErrorHandler(queries)
 	ytdlpHandler := handlers.NewYtDlpHandler(queries, downloader)
