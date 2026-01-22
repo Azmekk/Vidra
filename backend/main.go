@@ -35,11 +35,13 @@ func main() {
 	wsService := services.NewWebSocketService()
 	go wsService.Run()
 
-	downloader := services.NewDownloaderService(queries, wsService)
+	settingsService := services.NewSettingsService(queries)
+	downloader := services.NewDownloaderService(queries, wsService, settingsService)
 	videoHandler := handlers.NewVideoHandler(queries, downloader, wsService)
 	errorHandler := handlers.NewErrorHandler(queries)
 	ytdlpHandler := handlers.NewYtDlpHandler(queries, downloader)
 	systemHandler := handlers.NewSystemHandler()
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
 
 	r := chi.NewRouter()
 
@@ -58,6 +60,7 @@ func main() {
 	r.Mount("/api/errors", routers.ErrorRouter(errorHandler))
 	r.Mount("/api/yt-dlp", routers.YtDlpRouter(ytdlpHandler))
 	r.Mount("/api/system", routers.SystemRouter(systemHandler))
+	r.Mount("/api/settings", routers.SettingsRouter(settingsHandler))
 
 	// Serve downloads folder locally if VIDRA_DEV_ENVIRONMENT=true
 	if os.Getenv("VIDRA_DEV_ENVIRONMENT") == "true" {

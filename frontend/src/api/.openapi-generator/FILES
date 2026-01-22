@@ -2,6 +2,7 @@
 .npmignore
 api.ts
 api/errors-api.ts
+api/settings-api.ts
 api/system-api.ts
 api/videos-api.ts
 api/ytdlp-api.ts
@@ -15,13 +16,16 @@ docs/HandlersErrorResponse.md
 docs/HandlersMetadataRequest.md
 docs/HandlersPaginatedErrorResponse.md
 docs/HandlersPaginatedVideoResponse.md
+docs/HandlersSettingsResponse.md
 docs/HandlersSystemInfoResponse.md
+docs/HandlersUpdateSettingsRequest.md
 docs/HandlersUpdateVideoRequest.md
 docs/HandlersVideoResponse.md
 docs/ServicesDownloadProgressDTO.md
 docs/ServicesDownloadStatus.md
 docs/ServicesVideoMetadata.md
 docs/ServicesVideoOption.md
+docs/SettingsApi.md
 docs/SystemApi.md
 docs/VideosApi.md
 docs/YtdlpApi.md
@@ -33,7 +37,9 @@ models/handlers-error-response.ts
 models/handlers-metadata-request.ts
 models/handlers-paginated-error-response.ts
 models/handlers-paginated-video-response.ts
+models/handlers-settings-response.ts
 models/handlers-system-info-response.ts
+models/handlers-update-settings-request.ts
 models/handlers-update-video-request.ts
 models/handlers-video-response.ts
 models/index.ts

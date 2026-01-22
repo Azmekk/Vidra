@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { videosApi } from "$lib/api-client";
+  import { videosApi, settingsApi } from "$lib/api-client";
   import * as Button from "$lib/components/ui/button/index.js";
   import * as Select from "$lib/components/ui/select/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
@@ -37,6 +38,18 @@
   let videoCodec = $state<string>("libx264");
   let audioCodec = $state<string>("aac");
   let crfValue = $state<number[]>([23]);
+
+  onMount(async () => {
+    try {
+      const res = await settingsApi.getSettings();
+      reEncode = res.data.defaultReEncode ?? true;
+      videoCodec = res.data.defaultVideoCodec || "libx264";
+      audioCodec = res.data.defaultAudioCodec || "aac";
+      crfValue = [res.data.defaultCrf ?? 23];
+    } catch (e) {
+      console.error("Failed to load default settings", e);
+    }
+  });
 
   const videoCodecOptions = [
     {

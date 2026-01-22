@@ -114,12 +114,14 @@ type DownloaderService struct {
 	progress sync.Map // map[string]*DownloadProgress
 	queries  *database.Queries
 	ws       *WebSocketService
+	settings *SettingsService
 }
 
-func NewDownloaderService(queries *database.Queries, ws *WebSocketService) *DownloaderService {
+func NewDownloaderService(queries *database.Queries, ws *WebSocketService, settings *SettingsService) *DownloaderService {
 	return &DownloaderService{
-		queries: queries,
-		ws:      ws,
+		queries:  queries,
+		ws:       ws,
+		settings: settings,
 	}
 }
 
@@ -166,7 +168,12 @@ func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
 }
 
 func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
-	cmd := exec.CommandContext(ctx, "yt-dlp", "--dump-json", "--flat-playlist", "--no-warnings", url)
+	args := []string{"--dump-json", "--flat-playlist", "--no-warnings"}
+	if proxyURL := s.settings.GetProxyURL(ctx); proxyURL != "" {
+		args = append(args, "--proxy", proxyURL)
+	}
+	args = append(args, url)
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
 
 	var stderr bytes.Buffer
@@ -273,7 +280,12 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		log.Printf("INFO [%s]: Starting yt-dlp download with format: %s\n", idStr, f)
 		prog.Update(s.ws, idStr, 0, 0, "", "", StatusDownloading, "Starting download...")
 
-		cmd := exec.Command("yt-dlp", "-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline", url)
+		args := []string{"-f", f, "-o", tempPathPattern, "--write-thumbnail", "--convert-thumbnails", "jpg", "--newline"}
+		if proxyURL := s.settings.GetProxyURL(context.Background()); proxyURL != "" {
+			args = append(args, "--proxy", proxyURL)
+		}
+		args = append(args, url)
+		cmd := exec.Command("yt-dlp", args...)
 		log.Printf("DEBUG [%s]: Executing command: %s\n", idStr, cmd.String())
 		var fullOutput bytes.Buffer
 

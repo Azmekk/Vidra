@@ -14,9 +14,12 @@
 
 
 
-export * from './api/errors-api';
-export * from './api/settings-api';
-export * from './api/system-api';
-export * from './api/videos-api';
-export * from './api/ytdlp-api';
+export interface HandlersSettingsResponse {
+    'defaultAudioCodec'?: string;
+    'defaultCrf'?: number;
+    'defaultReEncode'?: boolean;
+    'defaultVideoCodec'?: string;
+    'proxyUrl'?: string;
+    'theme'?: string;
+}
 

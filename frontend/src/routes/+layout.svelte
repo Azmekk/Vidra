@@ -2,18 +2,21 @@
   import "./layout.css";
   import favicon from "$lib/assets/favicon-32x32.png";
   import { page } from "$app/stores";
-  import { ModeWatcher } from "mode-watcher";
+  import { onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import { ModeWatcher, setMode } from "mode-watcher";
   import ModeToggle from "$lib/components/mode-toggle.svelte";
   import ServerInfo from "$lib/components/server-info.svelte";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import * as Button from "$lib/components/ui/button/index.js";
-  import { ytdlpApi } from "$lib/api-client";
+  import { ytdlpApi, settingsApi } from "$lib/api-client";
   import {
     Video,
     Download,
     AlertCircle,
     Menu,
     RefreshCw,
+    Settings2,
   } from "@lucide/svelte";
 
   let { children } = $props();
@@ -22,7 +25,22 @@
     { href: "/", label: "Videos", icon: Video },
     { href: "/download", label: "Download", icon: Download },
     { href: "/errors", label: "Errors", icon: AlertCircle },
+    { href: "/settings", label: "Settings", icon: Settings2 },
   ];
+
+  onMount(async () => {
+    if (browser) {
+      try {
+        const res = await settingsApi.getSettings();
+        const theme = res.data.theme as "light" | "dark" | "system" | undefined;
+        if (theme) {
+          setMode(theme);
+        }
+      } catch (e) {
+        console.error("Failed to load theme from settings", e);
+      }
+    }
+  });
 
   let isMenuOpen = $state(false);
   let isUpdatingYtdlp = $state(false);
