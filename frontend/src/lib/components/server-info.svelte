@@ -74,7 +74,7 @@
   <DropdownMenu.Content
     align="end"
     sideOffset={8}
-    class="w-[calc(100vw-2rem)] sm:w-80 rounded-[1.5rem] p-6 shadow-2xl border-2"
+    class="w-[calc(100vw-2rem)] sm:w-96 rounded-[1.5rem] p-4 sm:p-6 shadow-2xl border-2"
   >
     <div class="space-y-4">
       <div class="flex items-center justify-between">
@@ -88,62 +88,56 @@
 
       <div class="space-y-3">
         <!-- Server Status -->
-        <div
-          class="flex items-center justify-between bg-muted/30 p-3 rounded-2xl"
-        >
-          <div class="flex items-center gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
             <div
-              class="rounded-full p-2 {info?.status === 'ok'
+              class="rounded-full p-1.5 {info?.status === 'ok'
                 ? 'bg-green-500/10 text-green-500'
                 : 'bg-red-500/10 text-red-500'}"
             >
-              <Server class="h-4 w-4" />
+              <Server class="h-3.5 w-3.5" />
             </div>
-            <span class="text-sm font-bold">Status</span>
+            <span class="text-sm font-bold">Server</span>
           </div>
           <span
-            class="text-xs font-black uppercase {info?.status === 'ok'
+            class="text-xs font-black {info?.status === 'ok'
               ? 'text-green-500'
               : 'text-red-500'}"
           >
-            {info?.status === "ok" ? "Online" : "Offline"}
+            {info?.status === "ok" ? "OK" : "OFF"}
           </span>
         </div>
 
         <!-- WebSocket Status -->
-        <div
-          class="flex items-center justify-between bg-muted/30 p-3 rounded-2xl"
-        >
-          <div class="flex items-center gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
             <div
-              class="rounded-full p-2 {wsStatus === 'connected'
-                ? 'bg-blue-500/10 text-blue-500'
+              class="rounded-full p-1.5 {wsStatus === 'connected'
+                ? 'bg-green-500/10 text-green-500'
                 : 'bg-amber-500/10 text-amber-500'}"
             >
               {#if wsStatus === "connected"}
-                <Wifi class="h-4 w-4" />
+                <Wifi class="h-3.5 w-3.5" />
               {:else}
-                <WifiOff class="h-4 w-4" />
+                <WifiOff class="h-3.5 w-3.5" />
               {/if}
             </div>
             <span class="text-sm font-bold">WebSocket</span>
           </div>
           <span
-            class="text-xs font-black uppercase {wsStatus === 'connected'
-              ? 'text-blue-500'
+            class="text-xs font-black {wsStatus === 'connected'
+              ? 'text-green-500'
               : 'text-amber-500'}"
           >
-            {wsStatus === "connected" ? "Connected" : "Waiting"}
+            {wsStatus === "connected" ? "OK" : "WAIT"}
           </span>
         </div>
 
         <!-- Disk Usage -->
-        <div
-          class="flex items-center justify-between bg-muted/30 p-3 rounded-2xl"
-        >
-          <div class="flex items-center gap-3">
-            <div class="rounded-full p-2 bg-purple-500/10 text-purple-500">
-              <HardDrive class="h-4 w-4" />
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="rounded-full p-1.5 bg-purple-500/10 text-purple-500">
+              <HardDrive class="h-3.5 w-3.5" />
             </div>
             <span class="text-sm font-bold">Storage</span>
           </div>
@@ -156,7 +150,7 @@
       <div class="pt-2">
         <button
           onclick={fetchInfo}
-          class="w-full py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity"
+          class="w-full py-3 sm:py-2 text-xs font-bold uppercase tracking-widest rounded-xl opacity-40 hover:opacity-100 hover:bg-muted/50 active:bg-muted/70 transition-all"
         >
           Refresh Info
         </button>

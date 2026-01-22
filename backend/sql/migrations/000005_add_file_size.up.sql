@@ -1,0 +1,1 @@
+ALTER TABLE videos ADD COLUMN file_size BIGINT;

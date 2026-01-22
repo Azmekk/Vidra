@@ -9,6 +9,7 @@ Name | Type | Description | Notes
 **downloadStatus** | **string** |  | [optional] [default to undefined]
 **downloadUrl** | **string** |  | [optional] [default to undefined]
 **fileName** | **string** |  | [optional] [default to undefined]
+**fileSize** | **number** |  | [optional] [default to undefined]
 **id** | **string** |  | [optional] [default to undefined]
 **name** | **string** |  | [optional] [default to undefined]
 **thumbnailFileName** | **string** |  | [optional] [default to undefined]
@@ -24,6 +25,7 @@ const instance: HandlersVideoResponse = {
     downloadStatus,
     downloadUrl,
     fileName,
+    fileSize,
     id,
     name,
     thumbnailFileName,

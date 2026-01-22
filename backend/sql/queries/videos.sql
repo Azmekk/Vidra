@@ -37,6 +37,7 @@ RETURNING *;
 UPDATE videos
   set file_name = $2,
   thumbnail_file_name = $3,
+  file_size = $4,
   updated_at = NOW()
 WHERE id = $1
 RETURNING *;

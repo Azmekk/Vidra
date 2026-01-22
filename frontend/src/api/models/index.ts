@@ -1,4 +1,5 @@
 export * from './handlers-create-video-request';
+export * from './handlers-encoding-options';
 export * from './handlers-error-response';
 export * from './handlers-metadata-request';
 export * from './handlers-paginated-error-response';

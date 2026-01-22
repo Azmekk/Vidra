@@ -6,6 +6,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **downloadUrl** | **string** |  | [optional] [default to undefined]
+**encodingOptions** | [**HandlersEncodingOptions**](HandlersEncodingOptions.md) |  | [optional] [default to undefined]
 **formatId** | **string** |  | [optional] [default to undefined]
 **name** | **string** |  | [optional] [default to undefined]
 **reEncode** | **boolean** |  | [optional] [default to undefined]
@@ -17,6 +18,7 @@ import { HandlersCreateVideoRequest } from './api';
 
 const instance: HandlersCreateVideoRequest = {
     downloadUrl,
+    encodingOptions,
     formatId,
     name,
     reEncode,

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bun run build:*)"
+      "Bash(bun run build:*)",
+      "Bash(sqlc generate:*)",
+      "Bash(go vet:*)",
+      "Bash(bunx @openapitools/openapi-generator-cli generate:*)",
+      "Bash(bun run check:*)",
+      "Bash(bunx biome check:*)"
     ]
   }
 }

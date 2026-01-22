@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
@@ -81,11 +83,18 @@ func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusOK, metadata)
 }
 
+type EncodingOptions struct {
+	VideoCodec string `json:"videoCodec"` // libx264, libvpx-vp9, vp9_qsv
+	AudioCodec string `json:"audioCodec"` // aac, libopus
+	CRF        int    `json:"crf"`
+}
+
 type CreateVideoRequest struct {
-	Name        string `json:"name"`
-	DownloadURL string `json:"downloadUrl"`
-	FormatID    string `json:"formatId"`
-	ReEncode    bool   `json:"reEncode"`
+	Name            string           `json:"name"`
+	DownloadURL     string           `json:"downloadUrl"`
+	FormatID        string           `json:"formatId"`
+	ReEncode        bool             `json:"reEncode"`
+	EncodingOptions *EncodingOptions `json:"encodingOptions,omitempty"`
 }
 
 func (r *CreateVideoRequest) Validate() error {
@@ -105,12 +114,13 @@ type VideoResponse struct {
 	ThumbnailFileName string `json:"thumbnailFileName,omitempty"`
 	DownloadURL       string `json:"downloadUrl"`
 	DownloadStatus    string `json:"downloadStatus"`
+	FileSize          *int64 `json:"fileSize,omitempty"`
 	CreatedAt         string `json:"createdAt"`
 	UpdatedAt         string `json:"updatedAt"`
 }
 
 func mapVideoToResponse(v database.Video) VideoResponse {
-	return VideoResponse{
+	resp := VideoResponse{
 		ID:                v.ID.String(),
 		Name:              v.Name,
 		FileName:          v.FileName.String,
@@ -120,6 +130,40 @@ func mapVideoToResponse(v database.Video) VideoResponse {
 		CreatedAt:         v.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:         v.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 	}
+	if v.FileSize.Valid {
+		resp.FileSize = &v.FileSize.Int64
+	}
+	return resp
+}
+
+// backfillFileSize checks if a video is missing file_size and attempts to read it from disk.
+// If found, it updates the database in the background and sets the size on the video struct.
+func (h *VideoHandler) backfillFileSize(video *database.Video) {
+	if video.FileSize.Valid && video.FileSize.Int64 > 0 {
+		return // Already has size
+	}
+	if video.DownloadStatus != "completed" || !video.FileName.Valid {
+		return // Not ready or no file
+	}
+
+	path := filepath.Join("downloads", video.FileName.String)
+	info, err := os.Stat(path)
+	if err != nil {
+		return // File not found
+	}
+
+	// Update in background (don't block response)
+	go func() {
+		h.Queries.UpdateVideoFiles(context.Background(), database.UpdateVideoFilesParams{
+			ID:                video.ID,
+			FileName:          video.FileName,
+			ThumbnailFileName: video.ThumbnailFileName,
+			FileSize:          pgtype.Int8{Int64: info.Size(), Valid: true},
+		})
+	}()
+
+	// Set on video for immediate response
+	video.FileSize = pgtype.Int8{Int64: info.Size(), Valid: true}
 }
 
 // CreateVideo godoc
@@ -180,7 +224,15 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Start background download
 	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
-	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name, req.ReEncode)
+	var encodingOpts *services.EncodingOptions
+	if req.EncodingOptions != nil {
+		encodingOpts = &services.EncodingOptions{
+			VideoCodec: req.EncodingOptions.VideoCodec,
+			AudioCodec: req.EncodingOptions.AudioCodec,
+			CRF:        req.EncodingOptions.CRF,
+		}
+	}
+	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name, req.ReEncode, encodingOpts)
 
 	h.Ws.Broadcast(services.WsEventVideoCreated, mapVideoToResponse(video))
 
@@ -253,6 +305,7 @@ func (h *VideoHandler) GetVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.backfillFileSize(&video)
 	utils.RespondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
 }
 
@@ -317,8 +370,9 @@ func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses := make([]VideoResponse, len(videos))
-	for i, v := range videos {
-		responses[i] = mapVideoToResponse(v)
+	for i := range videos {
+		h.backfillFileSize(&videos[i])
+		responses[i] = mapVideoToResponse(videos[i])
 	}
 
 	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))

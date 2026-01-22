@@ -10,6 +10,7 @@ common.ts
 configuration.ts
 docs/ErrorsApi.md
 docs/HandlersCreateVideoRequest.md
+docs/HandlersEncodingOptions.md
 docs/HandlersErrorResponse.md
 docs/HandlersMetadataRequest.md
 docs/HandlersPaginatedErrorResponse.md
@@ -27,6 +28,7 @@ docs/YtdlpApi.md
 git_push.sh
 index.ts
 models/handlers-create-video-request.ts
+models/handlers-encoding-options.ts
 models/handlers-error-response.ts
 models/handlers-metadata-request.ts
 models/handlers-paginated-error-response.ts

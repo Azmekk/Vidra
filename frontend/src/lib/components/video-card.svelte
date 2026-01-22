@@ -72,6 +72,14 @@
         return "bg-slate-500/10 text-slate-500 border-slate-500/20";
     }
   }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  }
 </script>
 
 <div
@@ -283,15 +291,23 @@
         </div>
       {:else}
         <div
-          class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+          class="flex items-center justify-between text-sm font-medium text-muted-foreground"
         >
-          <Clock class="h-4 w-4" />
-          <span
-            >Added {new Date(video.createdAt || "").toLocaleDateString(
-              undefined,
-              { month: "short", day: "numeric", year: "numeric" },
-            )}</span
-          >
+          <div class="flex items-center gap-2">
+            <Clock class="h-4 w-4" />
+            <span
+              >Added {new Date(video.createdAt || "").toLocaleDateString(
+                undefined,
+                { month: "short", day: "numeric", year: "numeric" },
+              )}</span
+            >
+          </div>
+          {#if video.fileSize}
+            <div class="flex items-center gap-2">
+              <HardDrive class="h-4 w-4" />
+              <span>{formatFileSize(video.fileSize)}</span>
+            </div>
+          {/if}
         </div>
       {/if}
     </div>

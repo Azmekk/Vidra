@@ -19,6 +19,7 @@ export interface HandlersVideoResponse {
     'downloadStatus'?: string;
     'downloadUrl'?: string;
     'fileName'?: string;
+    'fileSize'?: number;
     'id'?: string;
     'name'?: string;
     'thumbnailFileName'?: string;

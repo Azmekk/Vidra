@@ -104,6 +104,12 @@ func (p *DownloadProgress) GetSnapshot() DownloadProgressDTO {
 	}
 }
 
+type EncodingOptions struct {
+	VideoCodec string // libx264, libvpx-vp9, vp9_qsv
+	AudioCodec string // aac, libopus
+	CRF        int
+}
+
 type DownloaderService struct {
 	progress sync.Map // map[string]*DownloadProgress
 	queries  *database.Queries
@@ -215,7 +221,37 @@ func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*
 	return metadata, nil
 }
 
-func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string, reEncode bool) {
+func getOutputExtension(codec string) string {
+	if codec == "libvpx-vp9" || codec == "vp9_qsv" {
+		return ".webm"
+	}
+	return ".mp4"
+}
+
+func buildFFmpegCommand(input, output string, opts *EncodingOptions) *exec.Cmd {
+	args := []string{"-i", input}
+
+	switch opts.VideoCodec {
+	case "libvpx-vp9":
+		args = append(args, "-c:v", "libvpx-vp9", "-crf", strconv.Itoa(opts.CRF), "-b:v", "0", "-cpu-used", "4", "-deadline", "good")
+	case "vp9_qsv":
+		args = append(args, "-c:v", "vp9_qsv", "-global_quality", strconv.Itoa(opts.CRF))
+	default: // libx264 as default
+		args = append(args, "-c:v", "libx264", "-crf", strconv.Itoa(opts.CRF))
+	}
+
+	// Audio codec
+	if opts.AudioCodec == "libopus" {
+		args = append(args, "-c:a", "libopus")
+	} else {
+		args = append(args, "-c:a", "aac")
+	}
+
+	args = append(args, "-progress", "-", "-y", output)
+	return exec.Command("ffmpeg", args...)
+}
+
+func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string, reEncode bool, encodingOptions *EncodingOptions) {
 	idStr := id.String()
 	finalBaseName = utils.SanitizeFilename(finalBaseName)
 
@@ -353,11 +389,22 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 		// 3. Process video (Encode or Rename)
 		var finalFileName string
 		if reEncode {
-			finalFileName = finalBaseName + ".mp4"
-			finalPath := filepath.Join("downloads", finalFileName)
-			tempEncodePath := filepath.Join("downloads", idStr+"_encoded.mp4")
+			// Set default encoding options if not provided
+			opts := encodingOptions
+			if opts == nil {
+				opts = &EncodingOptions{
+					VideoCodec: "libx264",
+					AudioCodec: "aac",
+					CRF:        23,
+				}
+			}
 
-			log.Printf("INFO [%s]: Starting ffmpeg encoding to H.264: %s\n", idStr, tempEncodePath)
+			outputExt := getOutputExtension(opts.VideoCodec)
+			finalFileName = finalBaseName + outputExt
+			finalPath := filepath.Join("downloads", finalFileName)
+			tempEncodePath := filepath.Join("downloads", idStr+"_encoded"+outputExt)
+
+			log.Printf("INFO [%s]: Starting ffmpeg encoding with codec %s: %s\n", idStr, opts.VideoCodec, tempEncodePath)
 			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
 
 			// Get duration for progress calculation
@@ -369,9 +416,10 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			}
 			log.Printf("INFO [%s]: Video duration: %.2fs\n", idStr, duration)
 
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Encoding to H264...")
+			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, fmt.Sprintf("Encoding with %s...", opts.VideoCodec))
 
-			encodeCmd := exec.Command("ffmpeg", "-i", tempFile, "-c:v", "libx264", "-crf", "23", "-c:a", "aac", "-progress", "-", "-y", tempEncodePath)
+			encodeCmd := buildFFmpegCommand(tempFile, tempEncodePath, opts)
+			log.Printf("DEBUG [%s]: ffmpeg command: %s\n", idStr, encodeCmd.String())
 
 			var encodeOutput bytes.Buffer
 			encodeStdout, err := encodeCmd.StdoutPipe()
@@ -475,7 +523,17 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			}
 		}
 
-		// 6. Update database
+		// 6. Get file size
+		var fileSize int64
+		finalPath := filepath.Join("downloads", finalFileName)
+		if fileInfo, err := os.Stat(finalPath); err == nil {
+			fileSize = fileInfo.Size()
+			log.Printf("INFO [%s]: Final file size: %d bytes\n", idStr, fileSize)
+		} else {
+			log.Printf("WARN [%s]: Failed to get file size: %v\n", idStr, err)
+		}
+
+		// 7. Update database
 		log.Printf("INFO [%s]: Updating database with final file names and status.\n", idStr)
 		prog.Update(s.ws, idStr, 100, 100, "", "", StatusFinished, "Processing complete")
 
@@ -483,6 +541,7 @@ func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, u
 			ID:                id,
 			FileName:          pgtype.Text{String: finalFileName, Valid: true},
 			ThumbnailFileName: pgtype.Text{String: finalThumbnailName, Valid: finalThumbnailName != ""},
+			FileSize:          pgtype.Int8{Int64: fileSize, Valid: fileSize > 0},
 		})
 		if err != nil {
 			log.Printf("ERROR [%s]: Failed to update video file names in database: %v\n", idStr, err)

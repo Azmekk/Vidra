@@ -4,6 +4,7 @@
   import * as Button from "$lib/components/ui/button/index.js";
   import * as Select from "$lib/components/ui/select/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
+  import { Slider } from "$lib/components/ui/slider/index.js";
   import type {
     HandlersMetadataRequest,
     ServicesVideoMetadata,
@@ -19,6 +20,7 @@
     Clock,
     Type,
     X,
+    Settings2,
   } from "@lucide/svelte";
   import { Switch } from "$lib/components/ui/switch/index.js";
 
@@ -30,6 +32,68 @@
   let reEncode = $state(true);
   let error = $state<string | null>(null);
   let searchQuery = $state("");
+
+  // Encoding options
+  let videoCodec = $state<string>("libx264");
+  let audioCodec = $state<string>("aac");
+  let crfValue = $state<number[]>([23]);
+
+  const videoCodecOptions = [
+    {
+      value: "libx264",
+      label: "H.264",
+      description: "Best compatibility",
+      output: ".mp4",
+    },
+    {
+      value: "libvpx-vp9",
+      label: "VP9 Software",
+      description: "Better compression, slower",
+      output: ".webm",
+    },
+    {
+      value: "vp9_qsv",
+      label: "VP9 Hardware (QSV)",
+      description: "Fast, requires Intel GPU",
+      output: ".webm",
+    },
+  ];
+
+  const audioCodecOptions = [
+    { value: "aac", label: "AAC", description: "Universal compatibility" },
+    {
+      value: "libopus",
+      label: "Opus",
+      description: "Better quality at low bitrate",
+    },
+  ];
+
+  const crfRanges: Record<
+    string,
+    { min: number; max: number; default: number }
+  > = {
+    libx264: { min: 18, max: 28, default: 23 },
+    "libvpx-vp9": { min: 24, max: 40, default: 32 },
+    vp9_qsv: { min: 18, max: 35, default: 25 },
+  };
+
+  const currentCrfRange = $derived(crfRanges[videoCodec] || crfRanges.libx264);
+  const selectedVideoCodecInfo = $derived(
+    videoCodecOptions.find((o) => o.value === videoCodec) ||
+      videoCodecOptions[0],
+  );
+  const selectedAudioCodecInfo = $derived(
+    audioCodecOptions.find((o) => o.value === audioCodec) ||
+      audioCodecOptions[0],
+  );
+
+  // Reset CRF to default when codec changes
+  $effect(() => {
+    const range = crfRanges[videoCodec];
+    if (range) {
+      crfValue = [range.default];
+    }
+  });
 
   const isPlaylist = $derived(url.includes("list="));
 
@@ -114,6 +178,13 @@
         formatId: selectedFormatId || undefined,
         name: customName || metadata?.title || "New Download",
         reEncode: reEncode,
+        encodingOptions: reEncode
+          ? {
+              videoCodec: videoCodec,
+              audioCodec: audioCodec,
+              crf: crfValue[0],
+            }
+          : undefined,
       });
       goto("/");
     } catch (e) {
@@ -400,13 +471,120 @@
             class="flex items-center justify-between px-2 pt-6 border-t border-muted"
           >
             <div class="space-y-0.5">
-              <Label class="text-lg font-bold">Re-encode to H.264</Label>
+              <Label class="text-lg font-bold">Re-encode Video</Label>
               <p class="text-sm text-muted-foreground font-medium">
-                Ensures compatibility but takes longer
+                Convert to a different format
               </p>
             </div>
             <Switch bind:checked={reEncode} aria-label="Toggle re-encoding" />
           </div>
+
+          {#if reEncode}
+            <div
+              class="mt-6 space-y-6 animate-in slide-in-from-top-2 duration-300"
+            >
+              <div
+                class="flex items-center gap-2 px-2 text-sm font-bold text-muted-foreground uppercase tracking-widest"
+              >
+                <Settings2 class="h-4 w-4" />
+                Encoding Options
+              </div>
+
+              <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Video Codec -->
+                <div class="space-y-3">
+                  <Label class="text-base font-bold px-2">Video Codec</Label>
+                  <Select.Root type="single" bind:value={videoCodec}>
+                    <Select.Trigger
+                      class="h-auto! w-full rounded-2xl border-2 bg-muted/30 px-5 py-4 text-base font-bold transition-all hover:bg-muted/50"
+                    >
+                      <div class="flex flex-col items-start gap-0.5">
+                        <span>{selectedVideoCodecInfo.label}</span>
+                        <span
+                          class="text-[10px] font-medium opacity-60 uppercase tracking-wide"
+                          >{selectedVideoCodecInfo.description} • {selectedVideoCodecInfo.output}</span
+                        >
+                      </div>
+                    </Select.Trigger>
+                    <Select.Content class="rounded-2xl border-2 p-2 shadow-2xl">
+                      {#each videoCodecOptions as option}
+                        <Select.Item
+                          value={option.value}
+                          class="rounded-xl py-3 px-4 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1 last:mb-0"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <span>{option.label}</span>
+                            <span
+                              class="text-[10px] font-medium opacity-60 uppercase tracking-wide"
+                              >{option.description} • {option.output}</span
+                            >
+                          </div>
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                </div>
+
+                <!-- Audio Codec -->
+                <div class="space-y-3">
+                  <Label class="text-base font-bold px-2">Audio Codec</Label>
+                  <Select.Root type="single" bind:value={audioCodec}>
+                    <Select.Trigger
+                      class="h-auto! w-full rounded-2xl border-2 bg-muted/30 px-5 py-4 text-base font-bold transition-all hover:bg-muted/50"
+                    >
+                      <div class="flex flex-col items-start gap-0.5">
+                        <span>{selectedAudioCodecInfo.label}</span>
+                        <span
+                          class="text-[10px] font-medium opacity-60 uppercase tracking-wide"
+                          >{selectedAudioCodecInfo.description}</span
+                        >
+                      </div>
+                    </Select.Trigger>
+                    <Select.Content class="rounded-2xl border-2 p-2 shadow-2xl">
+                      {#each audioCodecOptions as option}
+                        <Select.Item
+                          value={option.value}
+                          class="rounded-xl py-3 px-4 font-bold transition-all focus:bg-primary focus:text-primary-foreground mb-1 last:mb-0"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <span>{option.label}</span>
+                            <span
+                              class="text-[10px] font-medium opacity-60 uppercase tracking-wide"
+                              >{option.description}</span
+                            >
+                          </div>
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                </div>
+              </div>
+
+              <!-- CRF Slider -->
+              <div class="space-y-4 px-2">
+                <div class="flex items-center justify-between">
+                  <Label class="text-base font-bold">Quality (CRF)</Label>
+                  <span class="text-lg font-black tabular-nums"
+                    >{crfValue[0]}</span
+                  >
+                </div>
+                <Slider
+                  type="multiple"
+                  bind:value={crfValue}
+                  min={currentCrfRange.min}
+                  max={currentCrfRange.max}
+                  step={1}
+                  class="py-2"
+                />
+                <div
+                  class="flex justify-between text-xs font-bold text-muted-foreground"
+                >
+                  <span>Higher Quality</span>
+                  <span>Smaller File</span>
+                </div>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </div>

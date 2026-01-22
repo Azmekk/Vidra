@@ -13,15 +13,16 @@
  */
 
 
-// May contain unused imports in some cases
-// @ts-ignore
-import type { HandlersEncodingOptions } from './handlers-encoding-options';
 
-export interface HandlersCreateVideoRequest {
-    'downloadUrl'?: string;
-    'encodingOptions'?: HandlersEncodingOptions;
-    'formatId'?: string;
-    'name'?: string;
-    'reEncode'?: boolean;
+export interface HandlersEncodingOptions {
+    /**
+     * aac, libopus
+     */
+    'audioCodec'?: string;
+    'crf'?: number;
+    /**
+     * libx264, libvpx-vp9, vp9_qsv
+     */
+    'videoCodec'?: string;
 }
 
