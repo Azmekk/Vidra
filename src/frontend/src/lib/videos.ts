@@ -1,4 +1,9 @@
-import { type InfiniteData, infiniteQueryOptions, type QueryClient } from "@tanstack/react-query";
+import {
+	type InfiniteData,
+	infiniteQueryOptions,
+	keepPreviousData,
+	type QueryClient,
+} from "@tanstack/react-query";
 import type {
 	HandlersPaginatedVideoResponse,
 	ListVideosParams,
@@ -6,7 +11,12 @@ import type {
 	ServicesVideoDTO,
 	ServicesVideoFileDTO,
 } from "@/api/gen/model";
-import { getGetVideoQueryKey, getListProgressQueryKey, listVideos } from "@/api/gen/videos/videos";
+import {
+	getGetVideoQueryKey,
+	getListProgressQueryKey,
+	listVideos,
+	useListProgress,
+} from "@/api/gen/videos/videos";
 
 export type Video = ServicesVideoDTO;
 export type VideoFile = ServicesVideoFileDTO;
@@ -22,6 +32,7 @@ export const libraryQuery = (params: Omit<ListVideosParams, "page" | "limit">) =
 		queryFn: ({ pageParam, signal }) =>
 			listVideos({ ...params, page: pageParam, limit: pageSize }, { signal }),
 		initialPageParam: 1,
+		placeholderData: keepPreviousData,
 		getNextPageParam: (last) => (last.currentPage < last.totalPages ? last.currentPage + 1 : undefined),
 	});
 
@@ -69,4 +80,13 @@ export function setProgress(qc: QueryClient, progress: Progress) {
 		...list.filter((p) => p.fileId !== progress.fileId),
 		progress,
 	]);
+}
+
+export function useVideoProgress(videoId: string) {
+	return useListProgress({
+		query: {
+			select: (list) => list.filter((p) => p.videoId === videoId),
+			staleTime: Number.POSITIVE_INFINITY,
+		},
+	}).data;
 }
