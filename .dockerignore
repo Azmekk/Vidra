@@ -1,0 +1,13 @@
+**/node_modules
+**/.env
+**/.env.*
+**/dev-dist
+.git
+.github
+.claude
+.playwright-mcp
+assets
+src/backend/gen
+src/backend/data
+src/backend/downloads
+src/backend/web/build/app

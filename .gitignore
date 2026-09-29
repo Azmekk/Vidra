@@ -7,3 +7,4 @@ dist/
 tmp/
 *.log
 .playwright-mcp/
+.claude/handoff/
