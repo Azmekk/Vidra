@@ -74,14 +74,15 @@ Once installed, Vidra appears in the share sheet of every app. Sharing a video f
 iOS doesn't let web apps join the share sheet, so a Shortcut sends the link to Vidra instead. You set it up once. After that, sharing is **Share → Vidra** and the download starts on the server without opening anything.
 
 1. In Vidra, open **Settings → API tokens**, create a token (e.g. "iPhone Shortcut") and copy it. It is only shown once.
-2. In the **Shortcuts** app, tap **+** and name the shortcut "Vidra".
-3. Open the shortcut's details (**ⓘ**), turn on **Show in Share Sheet**, and set the accepted types to **URLs** and **Text**.
-4. Add the action **Get Contents of URL** and expand it:
-   - URL: `https://<your-vidra>/api/videos/quick`
+2. In the **Shortcuts** app, tap **+**. The editor opens with an empty "New Shortcut".
+3. Tap **New Shortcut ⌄** at the top and choose **Rename**. Call it "Vidra".
+4. Tap the title again, open **Details** and turn on **Show in Share Sheet**, then tap **Done**. A **Receive Any input from Share Sheet** block appears at the top of the shortcut.
+5. In that block, tap **Any**, clear the selection and pick only **URLs** and **Text**. This way Vidra only shows up when you share a link or text.
+6. In **Search Actions**, find **Get Contents of URL** and add it. Tap its **URL** placeholder and enter `https://<your-vidra>/api/videos/quick`, then expand the action (the arrow or **Show More**):
    - Method: **POST**
-   - Headers: `Authorization` = `Bearer <your token>`
-   - Request Body: **JSON**, with one field, key `url` and value **Shortcut Input**
-5. Optionally, add **Show Notification** ("Sent to Vidra") as a confirmation.
+   - Headers: **Add new header**, key `Authorization`, value `Bearer <your token>`
+   - Request Body: **JSON**, then **Add new field → Text**, key `url`, value **Shortcut Input** (pick it from the variables bar above the keyboard)
+7. Optionally, add **Show Notification** with "Sent to Vidra" so you get a confirmation.
 
 In TikTok, tap **Share → More (…) → Vidra**. Apps often share text like "Check out this video! https://vm.tiktok.com/…" rather than a bare link. That's fine, because Vidra finds the link in the text.
 
