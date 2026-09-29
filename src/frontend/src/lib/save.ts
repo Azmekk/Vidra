@@ -10,13 +10,14 @@ const mimeTypes: Record<string, string> = {
 	mkv: "video/x-matroska",
 };
 
-export const isIOS =
+const isIOS =
 	/iPhone|iPad|iPod/.test(navigator.userAgent) ||
 	(navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1);
 
-export const canShareFiles = (() => {
+export const canSaveToPhotos = (() => {
 	try {
 		return (
+			isIOS &&
 			window.isSecureContext &&
 			typeof navigator.canShare === "function" &&
 			navigator.canShare({ files: [new File([], "v.mp4", { type: "video/mp4" })] })

@@ -37,7 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { VersionsSheet } from "@/components/versions-sheet";
 import { formatDuration, randomNamePattern } from "@/lib/format";
-import { canShareFiles, downloadUrl, isIOS, useSaveToPhotos } from "@/lib/save";
+import { canSaveToPhotos, downloadUrl, useSaveToPhotos } from "@/lib/save";
 import { cn } from "@/lib/utils";
 import {
 	activeStatuses,
@@ -235,7 +235,7 @@ export function VideoCard({ video }: { video: Video }) {
 									</a>
 								</DropdownMenuItem>
 							)}
-							{ready && canShareFiles && (
+							{ready && canSaveToPhotos && (
 								<DropdownMenuItem asChild>
 									<a href={downloadUrl(primary)} download>
 										<Download /> Download file
@@ -400,7 +400,7 @@ function PrimaryAction({ video, file, status }: { video: Video; file?: VideoFile
 		);
 	}
 
-	if (!canShareFiles) {
+	if (!canSaveToPhotos) {
 		return (
 			<Button asChild className={base}>
 				<a href={downloadUrl(file)} download>
@@ -410,7 +410,7 @@ function PrimaryAction({ video, file, status }: { video: Video; file?: VideoFile
 		);
 	}
 
-	if (isIOS && !file.iosCompatible) {
+	if (!file.iosCompatible) {
 		return (
 			<Button
 				className={base}
