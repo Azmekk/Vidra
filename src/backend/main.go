@@ -23,7 +23,6 @@ import (
 	"github.com/Azmekk/Vidra/backend/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/httprate"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
@@ -70,7 +69,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authMiddleware)
 
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
+	r.Use(vmw.ClientIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
@@ -78,8 +77,8 @@ func main() {
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/status", authHandler.GetStatus)
 			r.Post("/logout", authHandler.Logout)
-			r.With(httprate.LimitByIP(10, time.Minute)).Post("/login", authHandler.Login)
-			r.With(httprate.LimitByIP(10, time.Minute)).Post("/setup", authHandler.Setup)
+			r.With(vmw.RateLimitByIP(10, time.Minute)).Post("/login", authHandler.Login)
+			r.With(vmw.RateLimitByIP(10, time.Minute)).Post("/setup", authHandler.Setup)
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireAuth)
 				r.Put("/password", authHandler.ChangePassword)
@@ -109,7 +108,7 @@ func main() {
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Printf("🌐 Vidra is running on http://localhost:%s\n", cfg.Port)
+	log.Printf("Vidra is running on http://localhost:%s\n", cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("❌ Server failed: %v", err)
 	}
