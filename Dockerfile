@@ -1,15 +1,16 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1.4-slim AS web
+FROM --platform=$BUILDPLATFORM oven/bun:1.4-slim AS web
 WORKDIR /src/frontend
 COPY src/frontend/package.json src/frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY src/frontend ./
 RUN bun run build
 
-FROM sqlc/sqlc:1.30.0 AS sqlc
+FROM --platform=$BUILDPLATFORM sqlc/sqlc:1.30.0 AS sqlc
 
-FROM golang:1.27-alpine3.24 AS api
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine3.24 AS api
+ARG TARGETOS TARGETARCH
 WORKDIR /src/backend
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4
 COPY --from=sqlc /workspace/sqlc /usr/local/bin/sqlc
@@ -19,8 +20,9 @@ COPY src/backend ./
 COPY --from=web /src/backend/web/build/app ./web/build/app
 RUN sqlc generate \
     && swag init --output ./gen/docs/swagger --parseInternal --requiredByDefault --quiet \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vidra . \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pg2sqlite ./cmd/pg2sqlite
+    && export CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    && go build -trimpath -ldflags="-s -w" -o /out/vidra . \
+    && go build -trimpath -ldflags="-s -w" -o /out/pg2sqlite ./cmd/pg2sqlite
 
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata ffmpeg python3 deno rclone
