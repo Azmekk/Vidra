@@ -126,4 +126,4 @@ Once you're happy with Vidra 2:
 
 ## Staying on a major version
 
-`ghcr.io/azmekk/vidra:2` follows every 2.x release and never jumps to a future 3.0 with breaking changes. `:latest` follows `master` and may. Pin `:2` (or an exact version such as `:2.0.0`) unless you want to be on the edge.
+`ghcr.io/azmekk/vidra:2` follows every 2.x release and never jumps to a future 3.0 with breaking changes. `:latest` is always the newest release, so it will jump to 3.0 when that ships. Pin `:2` (or an exact version such as `:2.0.0`) to decide when to take a major upgrade.

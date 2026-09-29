@@ -42,7 +42,7 @@ docker compose up -d
 docker compose logs vidra | grep "setup code"
 ```
 
-The example pins `ghcr.io/azmekk/vidra:2`, which gets every 2.x update but never a breaking major release. `:latest` follows `master`.
+The example pins `ghcr.io/azmekk/vidra:2`, which gets every 2.x update but never a breaking major release. `:latest` is always the newest release, including future major versions.
 
 Open Vidra, enter the setup code from the log and create your account. The code is only printed while no account exists.
 
