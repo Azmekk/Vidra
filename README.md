@@ -10,7 +10,7 @@ It ships as one small Go binary with the web app built in, SQLite for storage an
 - **Versions.** Keep the original and re-encode it any time to H.264, HEVC, AV1 or VP9. Pick which version is the default.
 - **Smart encoding.** Choose a goal (iPhone, Balanced, Smallest, Fastest) and get a recommended profile with reasons, or set every ffmpeg option yourself. Working hardware encoders are detected automatically.
 - **Save to Photos on iPhone.** One tap opens the share sheet with the video ready to save. Versions that won't play on iOS get a one-tap "Make iPhone version".
-- **Installable app.** A PWA with offline shell, share target on Android and an iOS Shortcut via API tokens.
+- **Installable app.** A PWA with offline shell, share target on Android and API tokens for scripts.
 - **Backups.** Copy videos and database snapshots to S3/R2, Google Drive, MEGA or a local folder with rclone, configured from Settings.
 - **Live progress** over WebSocket, cancellable jobs, infinite-scroll library, search and an error log.
 
@@ -68,31 +68,6 @@ Open Vidra in Safari (iPhone) or Chrome (Android) and add it to the home screen:
 ### Share to Vidra on Android
 
 Once installed, Vidra appears in the share sheet of every app. Sharing a video from TikTok, Instagram, YouTube and others opens the download page with the link already filled in.
-
-### Share to Vidra on iPhone
-
-iOS doesn't let web apps join the share sheet, so a Shortcut sends the link to Vidra instead. You set it up once. After that, sharing is **Share → Vidra** and the download starts on the server without opening anything.
-
-1. In Vidra, open **Settings → API tokens**, create a token (e.g. "iPhone Shortcut") and copy it. It is only shown once.
-2. In the **Shortcuts** app, tap **+**. The editor opens with an empty "New Shortcut".
-3. Tap **New Shortcut ⌄** at the top and choose **Rename**. Call it "Vidra".
-4. Tap the title again, open **Details** and turn on **Show in Share Sheet**, then tap **Done**. A **Receive Any input from Share Sheet** block appears at the top of the shortcut.
-5. In that block, tap **Any**, clear the selection and pick only **URLs** and **Text**. This way Vidra only shows up when you share a link or text.
-6. In **Search Actions**, find **Get Contents of URL** and add it. Tap its **URL** placeholder and enter `https://<your-vidra>/api/videos/quick`, then expand the action (the arrow or **Show More**):
-   - Method: **POST**
-   - Headers: **Add new header**, key `Authorization`, value `Bearer <your token>`
-   - Request Body: **JSON**, then **Add new field → Text**, key `url`, value **Shortcut Input** (pick it from the variables bar above the keyboard)
-7. Optionally, add **Show Notification** with "Sent to Vidra" so you get a confirmation.
-
-In TikTok, tap **Share → More (…) → Vidra**. Apps often share text like "Check out this video! https://vm.tiktok.com/…" rather than a bare link. That's fine, because Vidra finds the link in the text.
-
-A few things to know:
-
-- **Encoding:** quick downloads use your default encoding from Settings.
-- **Names:** shared videos get a random name. Tap the pencil in the library to rename; the card suggests the video's original title.
-- **Reaching Vidra:** the phone must be able to reach your Vidra address, e.g. on your home network or over a VPN such as Tailscale.
-- **Security:** a token can do everything your account can. If it leaks, delete it in Settings and it stops working immediately.
-- **Opening Vidra instead:** to pick the format first, have the Shortcut run **Open URLs** with `https://<your-vidra>/download?url=<Shortcut Input>` instead. Adding `&quick=1` starts a quick download.
 
 ## Backups
 
