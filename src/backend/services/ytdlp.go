@@ -38,6 +38,7 @@ func (s *YtdlpService) DownloadCommand(ctx context.Context, url string, opts Ytd
 		"--newline",
 		"--no-playlist",
 		"--no-part",
+		"--no-mtime",
 		"--concurrent-fragments", "4",
 		"--write-thumbnail", "--convert-thumbnails", "jpg",
 		"--write-info-json", "--no-clean-info-json",
