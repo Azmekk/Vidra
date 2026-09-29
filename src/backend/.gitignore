@@ -1,0 +1,6 @@
+gen/
+downloads/
+data/
+web/build/app/
+.env
+.env.local

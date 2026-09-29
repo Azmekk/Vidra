@@ -1,52 +1,12 @@
 services:
-  db:
-    image: postgres:18-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: vidra
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    image: ghcr.io/azmekk/vidra-backend:master
-    # build: ./backend
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgres://postgres:password@db:5432/vidra?sslmode=disable
-      PORT: 8080
-    volumes:
-      - ./downloads:/app/downloads
-    depends_on:
-      db:
-        condition: service_healthy
-
-  frontend:
-    image: ghcr.io/azmekk/vidra-frontend:master
-    # build: ./frontend
-    restart: unless-stopped
-    environment:
-      VITE_BACKEND_URL: http://backend:8080
-    depends_on:
-      - backend
-
-  proxy:
-    image: nginx:1.29.4-alpine
+  vidra:
+    image: ghcr.io/azmekk/vidra:2
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:8080"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./downloads:/app/downloads:ro
-    depends_on:
-      - frontend
-      - backend
-
-volumes:
-  postgres_data:
+      - ./data:/app/data
+      - ./downloads:/app/downloads
+    # Only for trying Vidra over plain HTTP on your LAN. Keep it off behind HTTPS.
+    # environment:
+    #   VIDRA_INSECURE_COOKIES: "true"

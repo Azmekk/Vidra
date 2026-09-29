@@ -1,0 +1,24 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": {
+		"includes": ["**", "!src/api/gen", "!dev-dist"]
+	},
+	"formatter": { "indentStyle": "tab", "lineWidth": 110 },
+	"css": { "parser": { "tailwindDirectives": true } },
+	"linter": {
+		"rules": {
+			"preset": "recommended",
+			"suspicious": { "noDeprecatedImports": "error" },
+			"nursery": {
+				"useSortedClasses": {
+					"level": "on",
+					"fix": "safe",
+					"options": { "functions": ["cn", "cva"] }
+				}
+			}
+		},
+		"domains": { "react": "recommended" }
+	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } }
+}
