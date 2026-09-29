@@ -1,7 +1,9 @@
 package web
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io/fs"
 	"net/http"
 	"path"
@@ -13,8 +15,9 @@ import (
 //go:embed all:build
 var build embed.FS
 
-// Handler serves the SPA: hashed assets are cached forever, every other
-// unknown path falls back to index.html for client-side routing.
+// Handler serves the SPA: hashed assets are cached forever, other files are
+// revalidated against a content ETag, and every unknown path falls back to
+// index.html for client-side routing.
 func Handler() http.Handler {
 	app, err := fs.Sub(build, "build/app")
 	if err != nil {
@@ -26,30 +29,39 @@ func Handler() http.Handler {
 		})
 	}
 
+	etags := make(map[string]string)
+	err = fs.WalkDir(app, ".", func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || strings.HasPrefix(name, "assets/") {
+			return err
+		}
+		data, err := fs.ReadFile(app, name)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		etags[name] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	files := http.FileServerFS(app)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-		if name == "" || name == "index.html" {
-			serveIndex(w, r, app)
-			return
+		if name == "" {
+			name = "index.html"
 		}
 		if _, err := fs.Stat(app, name); err != nil {
-			serveIndex(w, r, app)
+			name = "index.html"
+		}
+		if strings.HasPrefix(name, "assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			files.ServeHTTP(w, r)
 			return
 		}
-		switch {
-		case strings.HasPrefix(name, "assets/"):
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		case name == "sw.js" || strings.HasSuffix(name, ".webmanifest"):
-			w.Header().Set("Cache-Control", "no-cache")
-		default:
-			w.Header().Set("Cache-Control", "public, max-age=86400")
-		}
-		files.ServeHTTP(w, r)
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", etags[name])
+		http.ServeFileFS(w, r, app, name)
 	})
-}
-
-func serveIndex(w http.ResponseWriter, r *http.Request, app fs.FS) {
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeFileFS(w, r, app, "index.html")
 }
