@@ -17,6 +17,7 @@ import type { HandlersCreateAPITokenResponse, ServicesSettings } from "@/api/gen
 import { getGetSettingsQueryKey, useGetSettings, useUpdateSettings } from "@/api/gen/settings/settings";
 import { useGetSystemInfo } from "@/api/gen/system/system";
 import { useUpdateYtdlp } from "@/api/gen/ytdlp/ytdlp";
+import { BackupsSection } from "@/components/backups-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EncodingEditor } from "@/components/encoding-editor";
 import { Section } from "@/components/section";
@@ -52,6 +53,7 @@ export function SettingsPage() {
 					<SectionSkeleton rows={3} />
 				</>
 			)}
+			<BackupsSection />
 			<SystemSection />
 		</div>
 	);

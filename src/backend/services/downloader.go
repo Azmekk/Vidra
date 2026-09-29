@@ -41,6 +41,7 @@ type DownloaderService struct {
 	downloads *pool
 	encodes   *pool
 	onFile    []func(Video, database.VideoFile)
+	onDelete  []func(names []string)
 }
 
 func NewDownloaderService(store *VideoStore, queries *database.Queries, ws *WebSocketService, settings *SettingsService,
@@ -67,6 +68,20 @@ func NewDownloaderService(store *VideoStore, queries *database.Queries, ws *WebS
 // OnFileCompleted registers a callback for every finished file version.
 func (d *DownloaderService) OnFileCompleted(fn func(Video, database.VideoFile)) {
 	d.onFile = append(d.onFile, fn)
+}
+
+// OnFilesDeleted registers a callback with the names of files removed from disk.
+func (d *DownloaderService) OnFilesDeleted(fn func(names []string)) {
+	d.onDelete = append(d.onDelete, fn)
+}
+
+func (d *DownloaderService) deleted(names []string) {
+	if len(names) == 0 {
+		return
+	}
+	for _, fn := range d.onDelete {
+		fn(names)
+	}
 }
 
 func (d *DownloaderService) Capabilities() *encoding.Capabilities { return d.caps }
@@ -299,6 +314,9 @@ func (d *DownloaderService) DeleteFile(ctx context.Context, videoID, fileID stri
 		return Video{}, err
 	}
 	d.removeFile(file)
+	if file.FileName != nil {
+		d.deleted([]string{*file.FileName})
+	}
 	return v, nil
 }
 
@@ -314,12 +332,18 @@ func (d *DownloaderService) DeleteVideo(ctx context.Context, id string) (Video, 
 	if _, err := d.store.Delete(ctx, id); err != nil {
 		return Video{}, err
 	}
+	var names []string
 	for _, f := range v.Files {
 		d.removeFile(f)
+		if f.FileName != nil {
+			names = append(names, *f.FileName)
+		}
 	}
 	if v.ThumbnailFileName != nil {
 		d.remove(*v.ThumbnailFileName)
+		names = append(names, *v.ThumbnailFileName)
 	}
+	d.deleted(names)
 	return v, nil
 }
 

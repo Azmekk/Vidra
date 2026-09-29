@@ -1,14 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { z } from "zod";
-import { GetVideoResponse, ListProgressResponseItem } from "@/api/gen/zod";
+import { getListBackupTargetsQueryKey } from "@/api/gen/backups/backups";
+import type { HandlersBackupOverviewResponse } from "@/api/gen/model";
+import { CreateBackupTargetResponse, GetVideoResponse, ListProgressResponseItem } from "@/api/gen/zod";
 import { removeVideo, setProgress, upsertVideo } from "@/lib/videos";
 
 const event = z.discriminatedUnion("type", [
 	z.object({ type: z.enum(["video_created", "video_updated"]), payload: GetVideoResponse }),
 	z.object({ type: z.literal("video_deleted"), payload: z.object({ id: z.string() }) }),
 	z.object({ type: z.literal("file_progress"), payload: ListProgressResponseItem }),
-	z.object({ type: z.literal("backup_status"), payload: z.unknown() }),
+	z.object({ type: z.literal("backup_status"), payload: CreateBackupTargetResponse }),
 ]);
 
 export function useLiveUpdates() {
@@ -43,7 +45,11 @@ export function useLiveUpdates() {
 						setProgress(qc, e.payload);
 						break;
 					case "backup_status":
-						qc.invalidateQueries({ queryKey: ["/api/backups/targets"] });
+						qc.setQueryData<HandlersBackupOverviewResponse>(getListBackupTargetsQueryKey(), (data) =>
+							data
+								? { ...data, targets: data.targets.map((t) => (t.id === e.payload.id ? e.payload : t)) }
+								: data,
+						);
 						break;
 				}
 			};

@@ -58,6 +58,11 @@ func main() {
 	downloader := services.NewDownloaderService(store, queries, ws, settings, ytdlp, caps, cfg.DownloadsDir)
 	downloader.RecoverInterrupted(ctx)
 
+	backups := services.NewBackupService(queries, db, ws, cfg.DownloadsDir)
+	downloader.OnFileCompleted(backups.FileCompleted)
+	downloader.OnFilesDeleted(backups.FilesDeleted)
+	backups.Start(ctx)
+
 	videoHandler := handlers.NewVideoHandler(store, downloader, ytdlp, settings)
 
 	auth := services.NewAuthService(queries)
@@ -98,6 +103,7 @@ func main() {
 			r.Mount("/yt-dlp", routers.YtDlpRouter(handlers.NewYtDlpHandler(ytdlp)))
 			r.Mount("/system", routers.SystemRouter(handlers.NewSystemHandler(cfg.DownloadsDir)))
 			r.Mount("/settings", routers.SettingsRouter(handlers.NewSettingsHandler(settings, caps)))
+			r.Mount("/backups", routers.BackupRouter(handlers.NewBackupHandler(backups)))
 		})
 	})
 	r.With(authMiddleware.RequireAuth).Get("/swagger/*", httpSwagger.WrapHandler)

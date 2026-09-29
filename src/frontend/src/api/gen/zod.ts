@@ -112,6 +112,126 @@ export const DeleteApiTokenResponse = zod.void()
 
 
 /**
+ * Secrets in each config are masked.
+ * @summary List backup targets
+ */
+export const ListBackupTargetsResponse = zod.object({
+  "available": zod.boolean(),
+  "targets": zod.array(zod.object({
+  "config": zod.record(zod.string(), zod.string()),
+  "createdAt": zod.string(),
+  "enabled": zod.boolean(),
+  "id": zod.string(),
+  "includeDatabase": zod.boolean(),
+  "includeVideos": zod.boolean(),
+  "lastError": zod.string(),
+  "lastRunAt": zod.string().optional(),
+  "lastStatus": zod.string(),
+  "name": zod.string(),
+  "path": zod.string(),
+  "provider": zod.string()
+})),
+  "version": zod.string()
+})
+
+
+/**
+ * @summary Create a backup target
+ */
+export const CreateBackupTargetBody = zod.object({
+  "config": zod.record(zod.string(), zod.string()),
+  "enabled": zod.boolean(),
+  "includeDatabase": zod.boolean(),
+  "includeVideos": zod.boolean(),
+  "name": zod.string(),
+  "path": zod.string(),
+  "provider": zod.string()
+})
+
+export const CreateBackupTargetResponse = zod.object({
+  "config": zod.record(zod.string(), zod.string()),
+  "createdAt": zod.string(),
+  "enabled": zod.boolean(),
+  "id": zod.string(),
+  "includeDatabase": zod.boolean(),
+  "includeVideos": zod.boolean(),
+  "lastError": zod.string(),
+  "lastRunAt": zod.string().optional(),
+  "lastStatus": zod.string(),
+  "name": zod.string(),
+  "path": zod.string(),
+  "provider": zod.string()
+})
+
+
+/**
+ * Send masked or empty secrets to keep the stored values. The provider cannot change.
+ * @summary Update a backup target
+ */
+export const UpdateBackupTargetParams = zod.object({
+  "id": zod.string().describe('Target ID')
+})
+
+export const UpdateBackupTargetBody = zod.object({
+  "config": zod.record(zod.string(), zod.string()),
+  "enabled": zod.boolean(),
+  "includeDatabase": zod.boolean(),
+  "includeVideos": zod.boolean(),
+  "name": zod.string(),
+  "path": zod.string(),
+  "provider": zod.string()
+})
+
+export const UpdateBackupTargetResponse = zod.object({
+  "config": zod.record(zod.string(), zod.string()),
+  "createdAt": zod.string(),
+  "enabled": zod.boolean(),
+  "id": zod.string(),
+  "includeDatabase": zod.boolean(),
+  "includeVideos": zod.boolean(),
+  "lastError": zod.string(),
+  "lastRunAt": zod.string().optional(),
+  "lastStatus": zod.string(),
+  "name": zod.string(),
+  "path": zod.string(),
+  "provider": zod.string()
+})
+
+
+/**
+ * Remote files are left untouched.
+ * @summary Delete a backup target
+ */
+export const DeleteBackupTargetParams = zod.object({
+  "id": zod.string().describe('Target ID')
+})
+
+export const DeleteBackupTargetResponse = zod.void()
+
+
+/**
+ * Copies every stored file and a database snapshot. Progress arrives as backup_status events.
+ * @summary Run a full backup now
+ */
+export const RunBackupTargetParams = zod.object({
+  "id": zod.string().describe('Target ID')
+})
+
+export const RunBackupTargetResponse = zod.void()
+
+
+/**
+ * Creates the remote folder if needed and lists it.
+ * @summary Test a backup target
+ */
+export const TestBackupTargetParams = zod.object({
+  "id": zod.string().describe('Target ID')
+})
+
+export const TestBackupTargetResponse = zod.void()
+
+
+/**
  * Hardware encoders are test-encoded at startup; only working ones are marked available.
  * @summary List encoders supported by this server's ffmpeg
  */

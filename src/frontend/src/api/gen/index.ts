@@ -1,4 +1,5 @@
 export * from './auth/auth.ts';
+export * from './backups/backups.ts';
 export * from './encoding/encoding.ts';
 export * from './errors/errors.ts';
 export * from './settings/settings.ts';
