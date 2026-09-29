@@ -46,6 +46,11 @@ SET source_title = COALESCE(sqlc.narg('source_title'), source_title),
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
+-- name: SetThumbnailFileName :exec
+UPDATE videos
+SET thumbnail_file_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?;
+
 -- name: SetPrimaryFile :one
 UPDATE videos
 SET primary_file_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -55,3 +60,7 @@ RETURNING *;
 -- name: DeleteVideo :exec
 DELETE FROM videos
 WHERE id = ?;
+
+-- name: ListVideoIDs :many
+SELECT id FROM videos
+ORDER BY created_at;

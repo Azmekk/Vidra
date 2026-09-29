@@ -31,6 +31,7 @@ import type {
   HandlersQuickDownloadRequest,
   HandlersUpdateVideoRequest,
   ListVideosParams,
+  ServicesFileNameSyncResult,
   ServicesProgress,
   ServicesVideoDTO,
   ServicesVideoMetadata,
@@ -529,6 +530,80 @@ export const useQuickDownload = <TError = ErrorType<UtilsErrorResponse>,
       > => {
       return useMutation(getQuickDownloadMutationOptions(options), queryClient);
     }
+    export const getSyncFileNamesUrl = () => {
+
+
+
+
+  return `/api/videos/sync-filenames`
+}
+
+/**
+ * Checks every stored file against the database and renames it on disk and in backups.
+ * @summary Rename stored files to match video names
+ */
+export const syncFileNames = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ServicesFileNameSyncResult> => {
+
+  return apiFetch<ServicesFileNameSyncResult>(getSyncFileNamesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncFileNamesMutationKey = () => ['syncFileNames'] as const;
+
+export const getSyncFileNamesMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncFileNames>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncFileNames>>, TError,void, TContext> => {
+
+const mutationKey = getSyncFileNamesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncFileNames>>, void> = () => {
+
+
+          return  syncFileNames(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncFileNamesMutationResult = NonNullable<Awaited<ReturnType<typeof syncFileNames>>>
+
+    export type SyncFileNamesMutationError = ErrorType<UtilsErrorResponse>
+
+
+    /**
+ * @summary Rename stored files to match video names
+ */
+export const useSyncFileNames = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncFileNames>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof syncFileNames>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncFileNamesMutationOptions(options), queryClient);
+    }
     export const getGetVideoUrl = (id: string,) => {
 
 
@@ -638,7 +713,7 @@ export const getUpdateVideoUrl = (id: string,) => {
 }
 
 /**
- * Renaming is instant and works while the video is still downloading.
+ * Stored files are renamed to match. Versions still downloading or encoding take the name when they finish.
  * @summary Rename a video
  */
 export const updateVideo = async (id: string,

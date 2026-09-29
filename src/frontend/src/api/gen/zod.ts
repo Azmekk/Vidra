@@ -124,7 +124,9 @@ export const ListBackupTargetsResponse = zod.object({
   "id": zod.string(),
   "includeDatabase": zod.boolean(),
   "includeVideos": zod.boolean(),
+  "intervalHours": zod.int(),
   "lastError": zod.string(),
+  "lastFullAt": zod.string().optional(),
   "lastRunAt": zod.string().optional(),
   "lastStatus": zod.string(),
   "name": zod.string(),
@@ -143,6 +145,7 @@ export const CreateBackupTargetBody = zod.object({
   "enabled": zod.boolean(),
   "includeDatabase": zod.boolean(),
   "includeVideos": zod.boolean(),
+  "intervalHours": zod.int(),
   "name": zod.string(),
   "path": zod.string(),
   "provider": zod.string()
@@ -155,7 +158,9 @@ export const CreateBackupTargetResponse = zod.object({
   "id": zod.string(),
   "includeDatabase": zod.boolean(),
   "includeVideos": zod.boolean(),
+  "intervalHours": zod.int(),
   "lastError": zod.string(),
+  "lastFullAt": zod.string().optional(),
   "lastRunAt": zod.string().optional(),
   "lastStatus": zod.string(),
   "name": zod.string(),
@@ -177,6 +182,7 @@ export const UpdateBackupTargetBody = zod.object({
   "enabled": zod.boolean(),
   "includeDatabase": zod.boolean(),
   "includeVideos": zod.boolean(),
+  "intervalHours": zod.int(),
   "name": zod.string(),
   "path": zod.string(),
   "provider": zod.string()
@@ -189,7 +195,9 @@ export const UpdateBackupTargetResponse = zod.object({
   "id": zod.string(),
   "includeDatabase": zod.boolean(),
   "includeVideos": zod.boolean(),
+  "intervalHours": zod.int(),
   "lastError": zod.string(),
+  "lastFullAt": zod.string().optional(),
   "lastRunAt": zod.string().optional(),
   "lastStatus": zod.string(),
   "name": zod.string(),
@@ -835,6 +843,17 @@ export const QuickDownloadResponse = zod.object({
 
 
 /**
+ * Checks every stored file against the database and renames it on disk and in backups.
+ * @summary Rename stored files to match video names
+ */
+export const SyncFileNamesResponse = zod.object({
+  "missing": zod.int(),
+  "renamed": zod.int(),
+  "videos": zod.int()
+})
+
+
+/**
  * @summary Get a video with all versions
  */
 export const GetVideoParams = zod.object({
@@ -899,7 +918,7 @@ export const GetVideoResponse = zod.object({
 
 
 /**
- * Renaming is instant and works while the video is still downloading.
+ * Stored files are renamed to match. Versions still downloading or encoding take the name when they finish.
  * @summary Rename a video
  */
 export const UpdateVideoParams = zod.object({

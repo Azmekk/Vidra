@@ -37,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { VersionsSheet } from "@/components/versions-sheet";
 import { formatDuration, randomNamePattern } from "@/lib/format";
+import { cleanName, nameError } from "@/lib/names";
 import { canSaveToPhotos, downloadUrl, useSaveToPhotos } from "@/lib/save";
 import { cn } from "@/lib/utils";
 import {
@@ -306,23 +307,38 @@ function Thumbnail({ video }: { video: Video }) {
 	);
 }
 
-function RenameField({ video, onDone }: { video: Video; onDone: () => void }) {
+function useRename(video: Video) {
 	const qc = useQueryClient();
+	const update = useUpdateVideo({
+		mutation: {
+			onSuccess: (v) => upsertVideo(qc, v),
+			onError: (e) => {
+				upsertVideo(qc, video);
+				toast.error(e.message);
+			},
+		},
+	});
+	return (name: string) => {
+		upsertVideo(qc, { ...video, name });
+		update.mutate({ id: video.id, data: { name } });
+	};
+}
+
+function RenameField({ video, onDone }: { video: Video; onDone: () => void }) {
 	const [name, setName] = useState(video.name);
-	const update = useUpdateVideo({ mutation: { onSuccess: (v) => upsertVideo(qc, v) } });
+	const rename = useRename(video);
+	const error = nameError(name);
 
 	const save = () => {
+		if (error) return;
 		const trimmed = name.trim();
-		if (trimmed && trimmed !== video.name) {
-			upsertVideo(qc, { ...video, name: trimmed });
-			update.mutate({ id: video.id, data: { name: trimmed } });
-		}
+		if (trimmed !== video.name) rename(trimmed);
 		onDone();
 	};
 
 	return (
 		<form
-			className="flex items-center gap-2"
+			className="flex flex-wrap items-center gap-2"
 			onSubmit={(e) => {
 				e.preventDefault();
 				save();
@@ -334,7 +350,8 @@ function RenameField({ video, onDone }: { video: Video; onDone: () => void }) {
 				onKeyDown={(e) => e.key === "Escape" && onDone()}
 				autoFocus
 				maxLength={255}
-				className="font-semibold"
+				aria-invalid={Boolean(error)}
+				className="min-w-0 flex-1 font-semibold"
 			/>
 			<Button
 				type="submit"
@@ -355,21 +372,19 @@ function RenameField({ video, onDone }: { video: Video; onDone: () => void }) {
 			>
 				<X />
 			</Button>
+			{error && <p className="w-full font-medium text-destructive text-sm">{error}</p>}
 		</form>
 	);
 }
 
 function UseSourceTitle({ video }: { video: Video }) {
-	const qc = useQueryClient();
-	const update = useUpdateVideo({ mutation: { onSuccess: (v) => upsertVideo(qc, v) } });
-	const title = video.sourceTitle ?? "";
+	const rename = useRename(video);
+	const title = cleanName(video.sourceTitle ?? "");
+	if (nameError(title)) return null;
 	return (
 		<button
 			type="button"
-			onClick={() => {
-				upsertVideo(qc, { ...video, name: title });
-				update.mutate({ id: video.id, data: { name: title } });
-			}}
+			onClick={() => rename(title)}
 			className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 font-semibold text-xs transition-colors hover:bg-muted/70"
 		>
 			<Type className="size-3.5 shrink-0" />

@@ -12,6 +12,7 @@ export interface ServicesBackupTargetInput {
   enabled: boolean;
   includeDatabase: boolean;
   includeVideos: boolean;
+  intervalHours: number;
   name: string;
   path: string;
   provider: string;

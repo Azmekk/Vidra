@@ -47,6 +47,7 @@ export * from './servicesBackupTargetDTO.ts';
 export * from './servicesBackupTargetDTOConfig.ts';
 export * from './servicesBackupTargetInput.ts';
 export * from './servicesBackupTargetInputConfig.ts';
+export * from './servicesFileNameSyncResult.ts';
 export * from './servicesProgress.ts';
 export * from './servicesSettings.ts';
 export * from './servicesVideoDTO.ts';

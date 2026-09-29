@@ -14,7 +14,9 @@ export interface ServicesBackupTargetDTO {
   id: string;
   includeDatabase: boolean;
   includeVideos: boolean;
+  intervalHours: number;
   lastError: string;
+  lastFullAt?: string;
   lastRunAt?: string;
   lastStatus: string;
   name: string;

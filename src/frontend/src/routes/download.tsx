@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { codecName, formatBytes, formatDuration } from "@/lib/format";
+import { cleanName, nameError } from "@/lib/names";
 import { extractUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import { upsertVideo } from "@/lib/videos";
@@ -175,7 +176,8 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 	const navigate = useNavigate();
 	const qc = useQueryClient();
 	const settings = useGetSettings();
-	const [name, setName] = useState(meta.title);
+	const [name, setName] = useState(() => cleanName(meta.title));
+	const nameInvalid = nameError(name);
 	const [formatId, setFormatId] = useState<string>();
 	const [encoding, setEncoding] = useState<EncodingRequest>();
 	const option = meta.options.find((o) => o.formatId === formatId);
@@ -216,7 +218,14 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 				<Label htmlFor="name" className="font-semibold">
 					Name
 				</Label>
-				<Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={255} />
+				<Input
+					id="name"
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					maxLength={255}
+					aria-invalid={Boolean(nameInvalid)}
+				/>
+				{nameInvalid && <p className="font-medium text-destructive text-sm">{nameInvalid}</p>}
 			</div>
 
 			<div className="space-y-2">
@@ -256,7 +265,7 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 			<Button
 				size="lg"
 				className="h-12 w-full rounded-2xl font-bold text-base"
-				disabled={create.isPending || !name.trim()}
+				disabled={create.isPending || Boolean(nameInvalid)}
 				onClick={() =>
 					create.mutate({
 						data: { url, name: name.trim(), sourceTitle: meta.title, formatId, encoding: value },

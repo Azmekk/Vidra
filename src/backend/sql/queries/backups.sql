@@ -7,13 +7,13 @@ SELECT * FROM backup_targets
 WHERE id = ?;
 
 -- name: CreateBackupTarget :one
-INSERT INTO backup_targets (id, name, provider, config, path, include_videos, include_database, enabled)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO backup_targets (id, name, provider, config, path, include_videos, include_database, enabled, interval_hours)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateBackupTarget :one
 UPDATE backup_targets
-SET name = ?, config = ?, path = ?, include_videos = ?, include_database = ?, enabled = ?,
+SET name = ?, config = ?, path = ?, include_videos = ?, include_database = ?, enabled = ?, interval_hours = ?,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ?
 RETURNING *;
@@ -23,6 +23,11 @@ UPDATE backup_targets
 SET last_run_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), last_status = ?, last_error = ?
 WHERE id = ?
 RETURNING *;
+
+-- name: SetBackupTargetFullRun :exec
+UPDATE backup_targets
+SET last_full_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?;
 
 -- name: DeleteBackupTarget :exec
 DELETE FROM backup_targets

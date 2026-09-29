@@ -12,6 +12,7 @@ func VideoRouter(h *handlers.VideoHandler) chi.Router {
 	r.Post("/quick", h.QuickDownload)
 	r.Post("/metadata", h.GetMetadata)
 	r.Get("/progress", h.ListProgress)
+	r.Post("/sync-filenames", h.SyncFileNames)
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.GetVideo)
 		r.Put("/", h.UpdateVideo)
