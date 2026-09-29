@@ -1,6 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, Loader2, Monitor, Moon, RefreshCw, Sun, Trash2 } from "lucide-react";
+import {
+	Check,
+	Copy,
+	KeyRound,
+	Loader2,
+	Monitor,
+	Moon,
+	Pin,
+	PinOff,
+	RefreshCw,
+	Sun,
+	Trash2,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -13,10 +25,16 @@ import {
 	useListApiTokens,
 } from "@/api/gen/auth/auth";
 import { useGetEncodingCapabilities } from "@/api/gen/encoding/encoding";
-import type { HandlersCreateAPITokenResponse, ServicesSettings } from "@/api/gen/model";
+import type { HandlersCreateAPITokenResponse, ServicesSettings, ServicesYtdlpStatus } from "@/api/gen/model";
 import { getGetSettingsQueryKey, useGetSettings, useUpdateSettings } from "@/api/gen/settings/settings";
 import { useGetSystemInfo } from "@/api/gen/system/system";
-import { useUpdateYtdlp } from "@/api/gen/ytdlp/ytdlp";
+import {
+	getGetYtdlpQueryKey,
+	useGetYtdlp,
+	usePinYtdlp,
+	useUnpinYtdlp,
+	useUpdateYtdlp,
+} from "@/api/gen/ytdlp/ytdlp";
 import { BackupsSection } from "@/components/backups-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EncodingEditor } from "@/components/encoding-editor";
@@ -27,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatBytes, formatRelative } from "@/lib/format";
 import { type Theme, useTheme } from "@/lib/theme";
@@ -416,15 +435,6 @@ function AppearanceSection() {
 function SystemSection() {
 	const info = useGetSystemInfo();
 	const caps = useGetEncodingCapabilities({ query: { staleTime: Number.POSITIVE_INFINITY } });
-	const [output, setOutput] = useState<string>();
-	const update = useUpdateYtdlp({
-		mutation: {
-			onSuccess: (r) => {
-				setOutput(r.output);
-				toast.success("yt-dlp updated");
-			},
-		},
-	});
 	const hw = caps.data?.video.filter((v) => v.hardware && v.available).map((v) => v.label) ?? [];
 
 	return (
@@ -438,21 +448,92 @@ function SystemSection() {
 				<Stat label="ffmpeg" value={caps.data?.ffmpegVersion.split("-")[0]} />
 				<Stat label="Hardware encoders" value={caps.data ? hw.join(", ") || "None" : undefined} />
 			</dl>
+			<YtdlpPanel />
+		</Section>
+	);
+}
+
+const LATEST = "latest";
+
+function YtdlpPanel() {
+	const qc = useQueryClient();
+	const status = useGetYtdlp();
+	const mutation = (success: (s: ServicesYtdlpStatus) => string) => ({
+		mutation: {
+			onSuccess: (s: ServicesYtdlpStatus) => {
+				qc.setQueryData(getGetYtdlpQueryKey(), s);
+				toast.success(success(s));
+			},
+			onError: (e: Error) => toast.error(e.message),
+		},
+	});
+	const update = useUpdateYtdlp(mutation((s) => `yt-dlp ${s.version} is up to date`));
+	const pin = usePinYtdlp(mutation((s) => `Pinned yt-dlp ${s.pinned}`));
+	const unpin = useUnpinYtdlp(mutation((s) => `Following the latest yt-dlp (${s.version})`));
+	const busy = update.isPending || pin.isPending || unpin.isPending;
+
+	const s = status.data;
+	if (!s) return <YtdlpPanelSkeleton />;
+	const pinnedMissing = s.pinned && !s.releases.some((r) => r.version === s.pinned);
+
+	return (
+		<div className="space-y-3 rounded-3xl bg-muted/60 p-4">
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0">
+					<p className="font-bold">yt-dlp {s.version ?? "not found"}</p>
+					<p className="text-muted-foreground text-sm">
+						{s.pinned ? "Pinned. Automatic updates are paused." : "Updates daily to the latest release."}
+					</p>
+				</div>
+				{s.pinned && (
+					<span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-xs">
+						<Pin className="size-3" /> Pinned
+					</span>
+				)}
+			</div>
+			<Select
+				value={s.pinned ?? LATEST}
+				disabled={busy}
+				onValueChange={(v) => (v === LATEST ? unpin.mutate() : pin.mutate({ data: { version: v } }))}
+			>
+				<SelectTrigger className="h-11! w-full rounded-xl bg-background" aria-label="yt-dlp version">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value={LATEST}>Always latest{s.latest && ` (${s.latest})`}</SelectItem>
+					{pinnedMissing && <SelectItem value={s.pinned as string}>{s.pinned}</SelectItem>}
+					{s.releases.map((r) => (
+						<SelectItem key={r.version} value={r.version}>
+							{r.version}
+							<span className="text-muted-foreground">{formatRelative(r.publishedAt)}</span>
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			{s.releasesError && <p className="text-destructive text-sm">{s.releasesError}</p>}
 			<Button
 				variant="secondary"
-				className="h-11 w-full rounded-xl font-bold"
-				disabled={update.isPending}
-				onClick={() => update.mutate()}
+				className="h-11 w-full rounded-xl bg-background font-bold"
+				disabled={busy}
+				onClick={() => (s.pinned ? unpin.mutate() : update.mutate())}
 			>
-				<RefreshCw className={cn(update.isPending && "animate-spin")} />
-				{update.isPending ? "Updating yt-dlp…" : "Update yt-dlp"}
+				{busy ? <Loader2 className="animate-spin" /> : s.pinned ? <PinOff /> : <RefreshCw />}
+				{busy ? "Installing yt-dlp…" : s.pinned ? "Unpin and use latest" : "Check for updates"}
 			</Button>
-			{output && (
-				<pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 font-mono text-xs">
-					{output}
-				</pre>
-			)}
-		</Section>
+		</div>
+	);
+}
+
+function YtdlpPanelSkeleton() {
+	return (
+		<div className="space-y-3 rounded-3xl bg-muted/60 p-4">
+			<div className="space-y-1.5">
+				<Skeleton className="h-5 w-36 rounded-md" />
+				<Skeleton className="h-4 w-56 rounded-md" />
+			</div>
+			<Skeleton className="h-11 w-full rounded-xl" />
+			<Skeleton className="h-11 w-full rounded-xl" />
+		</div>
 	);
 }
 

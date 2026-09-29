@@ -1223,9 +1223,64 @@ export const GetThumbnailResponse = zod.unknown()
 
 
 /**
- * Runs yt-dlp -U to update the binary
- * @summary Update yt-dlp
+ * @summary Get the installed yt-dlp version, the pin and recent releases
+ */
+export const GetYtdlpResponse = zod.object({
+  "latest": zod.string().optional(),
+  "pinned": zod.string().optional(),
+  "releases": zod.array(zod.object({
+  "publishedAt": zod.string(),
+  "version": zod.string()
+})),
+  "releasesError": zod.string().optional(),
+  "version": zod.string().optional()
+})
+
+
+/**
+ * @summary Install a specific yt-dlp version and keep it
+ */
+export const PinYtdlpBody = zod.object({
+  "version": zod.string()
+})
+
+export const PinYtdlpResponse = zod.object({
+  "latest": zod.string().optional(),
+  "pinned": zod.string().optional(),
+  "releases": zod.array(zod.object({
+  "publishedAt": zod.string(),
+  "version": zod.string()
+})),
+  "releasesError": zod.string().optional(),
+  "version": zod.string().optional()
+})
+
+
+/**
+ * @summary Follow the latest yt-dlp release again
+ */
+export const UnpinYtdlpResponse = zod.object({
+  "latest": zod.string().optional(),
+  "pinned": zod.string().optional(),
+  "releases": zod.array(zod.object({
+  "publishedAt": zod.string(),
+  "version": zod.string()
+})),
+  "releasesError": zod.string().optional(),
+  "version": zod.string().optional()
+})
+
+
+/**
+ * @summary Install the latest yt-dlp, or the pinned version
  */
 export const UpdateYtdlpResponse = zod.object({
-  "output": zod.string()
+  "latest": zod.string().optional(),
+  "pinned": zod.string().optional(),
+  "releases": zod.array(zod.object({
+  "publishedAt": zod.string(),
+  "version": zod.string()
+})),
+  "releasesError": zod.string().optional(),
+  "version": zod.string().optional()
 })

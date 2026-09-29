@@ -113,6 +113,16 @@ func (s *SettingsService) Update(ctx context.Context, settings Settings) (Settin
 	return result, nil
 }
 
+// YtdlpPin returns the pinned yt-dlp version, or "" to follow the latest release.
+func (s *SettingsService) YtdlpPin(ctx context.Context) (string, error) {
+	row, err := s.queries.GetSettings(ctx)
+	return row.YtdlpVersion, err
+}
+
+func (s *SettingsService) SetYtdlpPin(ctx context.Context, version string) error {
+	return s.queries.SetYtdlpVersion(ctx, version)
+}
+
 func fromRow(row database.Setting) Settings {
 	var req encoding.Request
 	if err := json.Unmarshal([]byte(row.DefaultEncoding), &req); err != nil || req.Goal == "" {

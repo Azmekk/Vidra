@@ -59,6 +59,8 @@ Vidra is meant to run behind HTTPS (Caddy, Traefik, Cloudflare Tunnel, …). Ses
 
 Everything else, including proxy, concurrency, default encoding and backups, lives in **Settings**.
 
+Vidra keeps its own yt-dlp in the data folder (`data/bin`) and updates it on startup and daily, so updates survive image upgrades. To stay on a specific version, pick it in **Settings → System**; choose **Always latest** to unpin.
+
 When a reverse proxy runs on the same host or Docker network, Vidra trusts its `X-Forwarded-For` header for rate limiting. Requests from public addresses are keyed by their own IP.
 
 ## Phones

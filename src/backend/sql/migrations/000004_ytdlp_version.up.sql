@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN ytdlp_version TEXT NOT NULL DEFAULT '';
