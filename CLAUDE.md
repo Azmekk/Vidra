@@ -59,6 +59,12 @@ Data model: `videos` (logical item, renamable, `primary_file_id`) → `video_fil
 
 ## Conventions
 
+### General
+
+- Commit at logical points with a terse body and no Co-Authored-By trailer.
+- Write clean, fast, maintainable code with the best current libraries. No unnecessary comments, and no tests unless asked.
+- Ask questions and list caveats rather than guessing.
+
 ### Backend
 
 - Every query goes through sqlc. The SQLite engine ignores args in `ORDER BY` (see the `params` CTE in `ListVideos`), and text args are wrapped as `CAST(sqlc.arg(x) AS TEXT)`.
@@ -77,4 +83,3 @@ Data model: `videos` (logical item, renamable, `primary_file_id`) → `video_fil
 - Never let a page flicker or show a blank state. Every loading state gets a shape-matched skeleton (`src/components/skeletons.tsx`), refetches keep previous data, and the theme is set before first paint.
 - Inputs are at least 16px (no iOS zoom), layouts respect safe areas, and the design uses large rounded cards (`rounded-[2.5rem]`), bold type and `max-w-2xl`.
 - Use `@/` imports, shadcn components in `src/components/ui`, icons from `lucide-react` and toasts from `sonner`.
-- Keep comments to a minimum and don't add tests unless asked.
