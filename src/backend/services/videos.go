@@ -253,6 +253,21 @@ func (s *VideoStore) SetPrimary(ctx context.Context, videoID string, fileID *str
 	})
 }
 
+// SetFileNames records renamed versions (by file ID) and an optional renamed thumbnail.
+func (s *VideoStore) SetFileNames(ctx context.Context, videoID string, files map[string]string, thumbnail *string) (Video, error) {
+	return s.mutate(ctx, videoID, func(q *database.Queries) error {
+		for id, name := range files {
+			if err := q.SetFileName(ctx, database.SetFileNameParams{ID: id, FileName: &name}); err != nil {
+				return err
+			}
+		}
+		if thumbnail == nil {
+			return nil
+		}
+		return q.SetThumbnailFileName(ctx, database.SetThumbnailFileNameParams{ID: videoID, ThumbnailFileName: thumbnail})
+	})
+}
+
 func (s *VideoStore) CreateFile(ctx context.Context, p database.CreateVideoFileParams) (database.VideoFile, error) {
 	p.ID = NewID()
 	var file database.VideoFile

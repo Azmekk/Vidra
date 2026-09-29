@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -90,6 +89,10 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = utils.RandomName()
+	}
+	if err := utils.ValidateName(name); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	var sourceTitle *string
 	if req.SourceTitle != "" {
@@ -228,7 +231,7 @@ type UpdateVideoRequest struct {
 
 // UpdateVideo godoc
 // @Summary Rename a video
-// @Description Renaming is instant and works while the video is still downloading.
+// @Description Stored files are renamed to match. Versions still downloading or encoding take the name when they finish.
 // @ID updateVideo
 // @Tags videos
 // @Accept json
@@ -245,8 +248,8 @@ func (h *VideoHandler) UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
-	if name == "" || len(name) > 300 {
-		utils.RespondWithError(w, http.StatusBadRequest, "name must be between 1 and 300 characters")
+	if err := utils.ValidateName(name); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	video, err := h.Store.Rename(r.Context(), chi.URLParam(r, "id"), name)
@@ -254,7 +257,30 @@ func (h *VideoHandler) UpdateVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("video renamed", "video", video.ID, "name", name)
+	if synced, err := h.Downloader.SyncVideoFileNames(r.Context(), video.ID); err != nil {
+		slog.Warn("failed to rename files", "video", video.ID, "error", err)
+	} else {
+		video = synced
+	}
 	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
+}
+
+// SyncFileNames godoc
+// @Summary Rename stored files to match video names
+// @Description Checks every stored file against the database and renames it on disk and in backups.
+// @ID syncFileNames
+// @Tags videos
+// @Produce json
+// @Success 200 {object} services.FileNameSyncResult
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/videos/sync-filenames [post]
+func (h *VideoHandler) SyncFileNames(w http.ResponseWriter, r *http.Request) {
+	res, err := h.Downloader.SyncFileNames(r.Context())
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusOK, res)
 }
 
 // DeleteVideo godoc
@@ -461,18 +487,14 @@ func (h *VideoHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ext := filepath.Ext(*file.FileName)
-	name := utils.SanitizeFilename(video.Name)
-	if len(video.Files) > 1 {
-		name = utils.SanitizeFilename(fmt.Sprintf("%s (%s)", video.Name, strings.ReplaceAll(file.Label, " · ", " ")))
-	}
+	name := services.VersionFileBase(video, file) + filepath.Ext(*file.FileName)
 	disposition := "inline"
 	if r.URL.Query().Get("download") == "1" {
 		disposition = "attachment"
 	}
-	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name + ext}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name}))
 	w.Header().Set("Cache-Control", "private, max-age=86400")
-	http.ServeContent(w, r, name+ext, info.ModTime(), f)
+	http.ServeContent(w, r, name, info.ModTime(), f)
 }
 
 func (h *VideoHandler) video(w http.ResponseWriter, r *http.Request) (services.Video, bool) {

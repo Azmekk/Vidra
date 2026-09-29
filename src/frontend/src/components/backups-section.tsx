@@ -116,6 +116,17 @@ const providers: Record<
 	},
 };
 
+const intervals = [
+	{ hours: 0, label: "Only when run manually" },
+	{ hours: 6, label: "Every 6 hours" },
+	{ hours: 12, label: "Every 12 hours" },
+	{ hours: 24, label: "Daily" },
+	{ hours: 168, label: "Weekly" },
+];
+
+const intervalLabel = (hours: number) =>
+	intervals.find((i) => i.hours === hours)?.label ?? `Every ${hours} hours`;
+
 const statusStyles: Record<string, { label: string; className: string; icon: typeof CircleCheck }> = {
 	ok: {
 		label: "Up to date",
@@ -207,6 +218,10 @@ function TargetRow({ target: t, onEdit }: { target: ServicesBackupTargetDTO; onE
 						{providers[t.provider as Provider]?.label ?? t.provider}
 						{t.path && ` · ${t.path}`}
 						{t.lastRunAt && ` · ${formatRelative(t.lastRunAt)}`}
+					</p>
+					<p className="text-muted-foreground text-sm">
+						Full backup: {intervalLabel(t.intervalHours).toLowerCase()}
+						{t.lastFullAt && `, last ${formatRelative(t.lastFullAt)}`}
 					</p>
 				</div>
 				<Button
@@ -309,6 +324,7 @@ function TargetSheet({
 					includeVideos: target.includeVideos,
 					includeDatabase: target.includeDatabase,
 					enabled: target.enabled,
+					intervalHours: target.intervalHours,
 				}
 			: {
 					name: "",
@@ -318,6 +334,7 @@ function TargetSheet({
 					includeVideos: true,
 					includeDatabase: true,
 					enabled: true,
+					intervalHours: 24,
 				},
 	);
 	const [errors, setErrors] = useState<Record<string, string>>({});
@@ -448,10 +465,36 @@ function TargetSheet({
 					/>
 					<SwitchRow
 						label="Database"
-						description="Snapshot shortly after changes and daily, keeping the last 7."
+						description="Snapshot shortly after changes and on every full backup, keeping the last 7."
 						checked={values.includeDatabase}
 						onCheckedChange={(includeDatabase) => setValues((v) => ({ ...v, includeDatabase }))}
 					/>
+					<div className="space-y-2">
+						<Label className="font-semibold">Full backup</Label>
+						<Select
+							value={String(values.intervalHours)}
+							onValueChange={(v) => setValues((s) => ({ ...s, intervalHours: Number(v) }))}
+						>
+							<SelectTrigger className="h-11! w-full rounded-xl bg-background">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{!intervals.some((i) => i.hours === values.intervalHours) && (
+									<SelectItem value={String(values.intervalHours)}>
+										{intervalLabel(values.intervalHours)}
+									</SelectItem>
+								)}
+								{intervals.map((i) => (
+									<SelectItem key={i.hours} value={String(i.hours)}>
+										{i.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<p className="text-muted-foreground text-sm">
+							Copies anything missing and takes a database snapshot. Run does the same on demand.
+						</p>
+					</div>
 					<SwitchRow
 						label="Enabled"
 						checked={values.enabled}

@@ -64,6 +64,7 @@ func main() {
 	backups := services.NewBackupService(queries, db, ws, cfg.DownloadsDir)
 	downloader.OnFileCompleted(backups.FileCompleted)
 	downloader.OnFilesDeleted(backups.FilesDeleted)
+	downloader.OnFilesRenamed(backups.FilesRenamed)
 	backups.Start(ctx)
 
 	videoHandler := handlers.NewVideoHandler(store, downloader, ytdlp, settings)

@@ -36,6 +36,11 @@ SET file_name = sqlc.arg('file_name'),
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
+-- name: SetFileName :exec
+UPDATE video_files
+SET file_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?;
+
 -- name: MarkInterruptedFiles :many
 UPDATE video_files
 SET status = 'error', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

@@ -43,6 +43,11 @@ type DownloaderService struct {
 	encodes   *pool
 	onFile    []func(Video, database.VideoFile)
 	onDelete  []func(names []string)
+	onRename  []func([]FileRename)
+
+	names    sync.Mutex
+	pins     sync.Mutex
+	pinCount map[string]int
 }
 
 func NewDownloaderService(store *VideoStore, queries *database.Queries, ws *WebSocketService, settings *SettingsService,
@@ -58,6 +63,7 @@ func NewDownloaderService(store *VideoStore, queries *database.Queries, ws *WebS
 		dir:         dir,
 		downloads:   newPool(s.MaxConcurrentDownloads),
 		encodes:     newPool(s.MaxConcurrentEncodes),
+		pinCount:    map[string]int{},
 	}
 	settings.OnChange(func(s Settings) {
 		d.downloads.setLimit(s.MaxConcurrentDownloads)
@@ -228,6 +234,12 @@ func (d *DownloaderService) runEncode(j *job, videoID string, file, source datab
 		return
 	}
 	defer d.encodes.release()
+	source, unpin, err := d.pinSource(ctx, videoID, source.ID)
+	if err != nil {
+		d.fail(j, videoID, file.ID, "ffmpeg", err, "")
+		return
+	}
+	defer unpin()
 	d.setStatus(j, videoID, file.ID, FileEncoding)
 	started := time.Now()
 	slog.Info("encode started", "video", videoID, "file", file.ID, "label", rec.Label)
@@ -256,6 +268,7 @@ func (d *DownloaderService) runEncode(j *job, videoID string, file, source datab
 		percent := min(t/1e6/src.Duration*100, 100)
 		j.update(Progress{VideoID: videoID, FileID: file.ID, Stage: FileEncoding, Percent: percent}, false)
 	})
+	unpin()
 	if err != nil {
 		_ = os.Remove(d.Path(outName))
 		d.fail(j, videoID, file.ID, cmd.String(), err, output)
@@ -289,6 +302,14 @@ func (d *DownloaderService) complete(ctx context.Context, j *job, videoID string
 	if err == nil && (makePrimary || v.PrimaryFileID == nil) {
 		v, err = d.store.SetPrimary(ctx, videoID, &file.ID)
 	}
+	if err == nil {
+		if synced, e := d.syncVideo(ctx, videoID, *params.FileName); e != nil {
+			slog.Warn("failed to rename files", "video", videoID, "error", e)
+		} else {
+			v = synced
+			file, _ = v.File(file.ID)
+		}
+	}
 	j.update(Progress{VideoID: videoID, FileID: file.ID, Stage: FileCompleted, Percent: 100}, true)
 	if err == nil {
 		for _, fn := range d.onFile {
@@ -300,6 +321,8 @@ func (d *DownloaderService) complete(ctx context.Context, j *job, videoID string
 
 // DeleteFile cancels any running job for a version and removes it from disk.
 func (d *DownloaderService) DeleteFile(ctx context.Context, videoID, fileID string) (Video, error) {
+	d.names.Lock()
+	defer d.names.Unlock()
 	v, err := d.store.Get(ctx, videoID)
 	if err != nil {
 		return Video{}, err
@@ -328,12 +351,20 @@ func (d *DownloaderService) DeleteFile(ctx context.Context, videoID, fileID stri
 	if file.FileName != nil {
 		d.deleted([]string{*file.FileName})
 	}
+	if synced, renames, err := d.syncLocked(ctx, videoID, ""); err != nil {
+		slog.Warn("failed to rename files", "video", videoID, "error", err)
+	} else {
+		v = synced
+		d.renamed(renames)
+	}
 	slog.Info("version deleted", "video", videoID, "file", fileID, "label", file.Label)
 	return v, nil
 }
 
 // DeleteVideo cancels all jobs and removes every file belonging to a video.
 func (d *DownloaderService) DeleteVideo(ctx context.Context, id string) (Video, error) {
+	d.names.Lock()
+	defer d.names.Unlock()
 	v, err := d.store.Get(ctx, id)
 	if err != nil {
 		return Video{}, err
@@ -431,6 +462,8 @@ func (d *DownloaderService) locate(fileID string) (string, error) {
 
 // applyInfo stores title, uploader and thumbnail written next to the download.
 func (d *DownloaderService) applyInfo(ctx context.Context, videoID, fileID string) {
+	d.names.Lock()
+	defer d.names.Unlock()
 	params := database.UpdateVideoSourceParams{ID: videoID}
 
 	infoPath := filepath.Join(d.dir, fileID+".info.json")
@@ -447,6 +480,9 @@ func (d *DownloaderService) applyInfo(ctx context.Context, videoID, fileID strin
 	thumb := filepath.Join(d.dir, fileID+".jpg")
 	if _, err := os.Stat(thumb); err == nil {
 		name := videoID + ".jpg"
+		if v, err := d.store.Get(ctx, videoID); err == nil && v.ThumbnailFileName != nil {
+			name = *v.ThumbnailFileName
+		}
 		if err := os.Rename(thumb, d.Path(name)); err == nil {
 			params.ThumbnailFileName = &name
 		}

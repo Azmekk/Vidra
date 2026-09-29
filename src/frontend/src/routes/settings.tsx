@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
 	Check,
 	Copy,
+	FileText,
 	KeyRound,
 	Loader2,
 	Monitor,
@@ -28,6 +29,7 @@ import { useGetEncodingCapabilities } from "@/api/gen/encoding/encoding";
 import type { HandlersCreateAPITokenResponse, ServicesSettings, ServicesYtdlpStatus } from "@/api/gen/model";
 import { getGetSettingsQueryKey, useGetSettings, useUpdateSettings } from "@/api/gen/settings/settings";
 import { useGetSystemInfo } from "@/api/gen/system/system";
+import { useSyncFileNames } from "@/api/gen/videos/videos";
 import {
 	getGetYtdlpQueryKey,
 	useGetYtdlp,
@@ -448,8 +450,44 @@ function SystemSection() {
 				<Stat label="ffmpeg" value={caps.data?.ffmpegVersion.split("-")[0]} />
 				<Stat label="Hardware encoders" value={caps.data ? hw.join(", ") || "None" : undefined} />
 			</dl>
+			<FileNamesPanel />
 			<YtdlpPanel />
 		</Section>
+	);
+}
+
+function FileNamesPanel() {
+	const qc = useQueryClient();
+	const sync = useSyncFileNames({
+		mutation: {
+			onSuccess: (r) => {
+				qc.invalidateQueries({ queryKey: ["/api/videos"] });
+				const renamed = r.renamed === 1 ? "1 file" : `${r.renamed} files`;
+				const summary = r.renamed ? `Renamed ${renamed}` : "File names are already in sync";
+				if (r.missing) toast.warning(`${summary}. ${r.missing} stored files are missing on disk.`);
+				else toast.success(summary);
+			},
+		},
+	});
+
+	return (
+		<div className="space-y-3 rounded-3xl bg-muted/60 p-4">
+			<div>
+				<p className="font-bold">File names</p>
+				<p className="text-muted-foreground text-sm">
+					Rename stored files to match their video names. Backups are renamed too.
+				</p>
+			</div>
+			<Button
+				variant="secondary"
+				className="h-11 w-full rounded-xl bg-background font-bold"
+				disabled={sync.isPending}
+				onClick={() => sync.mutate()}
+			>
+				{sync.isPending ? <Loader2 className="animate-spin" /> : <FileText />}
+				{sync.isPending ? "Syncing file names…" : "Sync file names"}
+			</Button>
+		</div>
 	);
 }
 

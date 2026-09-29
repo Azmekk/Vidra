@@ -30,8 +30,8 @@ const (
 	backupSecretMask  = "••••••••"
 	backupSnapshots   = 7
 	backupDebounce    = 5 * time.Minute
-	backupDailyPeriod = 24 * time.Hour
 	backupTimeout     = 6 * time.Hour
+	backupMaxInterval = 24 * 30
 )
 
 type backupField struct {
@@ -69,6 +69,7 @@ type BackupTargetInput struct {
 	IncludeVideos   bool              `json:"includeVideos"`
 	IncludeDatabase bool              `json:"includeDatabase"`
 	Enabled         bool              `json:"enabled"`
+	IntervalHours   int               `json:"intervalHours"`
 }
 
 type BackupTargetDTO struct {
@@ -80,7 +81,9 @@ type BackupTargetDTO struct {
 	IncludeVideos   bool              `json:"includeVideos"`
 	IncludeDatabase bool              `json:"includeDatabase"`
 	Enabled         bool              `json:"enabled"`
+	IntervalHours   int               `json:"intervalHours"`
 	LastRunAt       *string           `json:"lastRunAt,omitempty"`
+	LastFullAt      *string           `json:"lastFullAt,omitempty"`
 	LastStatus      string            `json:"lastStatus"`
 	LastError       string            `json:"lastError"`
 	CreatedAt       string            `json:"createdAt"`
@@ -90,6 +93,7 @@ type backupJob struct {
 	targetID string
 	upload   []string
 	remove   []string
+	moves    []FileRename
 	snapshot bool
 	full     bool
 }
@@ -106,12 +110,13 @@ type BackupService struct {
 	mu      sync.Mutex
 	dirty   bool
 	running map[string]bool
+	queued  map[string]bool
 }
 
 func NewBackupService(queries *database.Queries, db *sql.DB, ws *WebSocketService, downloadsDir string) *BackupService {
 	s := &BackupService{
 		queries: queries, db: db, ws: ws, downloadsDir: downloadsDir,
-		jobs: make(chan backupJob, 256), running: map[string]bool{},
+		jobs: make(chan backupJob, 256), running: map[string]bool{}, queued: map[string]bool{},
 	}
 	if bin, err := exec.LookPath("rclone"); err == nil {
 		s.rclone = bin
@@ -159,17 +164,34 @@ func (s *BackupService) FilesDeleted(names []string) {
 	s.enqueue(backupJob{remove: names})
 }
 
+// FilesRenamed moves renamed files on every remote.
+func (s *BackupService) FilesRenamed(renames []FileRename) {
+	s.markDirty()
+	s.enqueue(backupJob{moves: renames})
+}
+
 func (s *BackupService) Run(id string) error {
 	if !s.Available() {
 		return ErrRcloneMissing
 	}
+	return s.queueFull(id)
+}
+
+// queueFull enqueues a full backup of one target unless one is already queued or running.
+func (s *BackupService) queueFull(id string) error {
 	s.mu.Lock()
-	busy := s.running[id]
-	s.mu.Unlock()
-	if busy {
+	if s.running[id] || s.queued[id] {
+		s.mu.Unlock()
 		return errors.New("a backup is already running for this target")
 	}
-	s.enqueue(backupJob{targetID: id, full: true, snapshot: true})
+	s.queued[id] = true
+	s.mu.Unlock()
+	if !s.enqueue(backupJob{targetID: id, full: true, snapshot: true}) {
+		s.mu.Lock()
+		delete(s.queued, id)
+		s.mu.Unlock()
+		return errors.New("the backup queue is full, try again later")
+	}
 	return nil
 }
 
@@ -211,6 +233,7 @@ func (s *BackupService) Create(ctx context.Context, in BackupTargetInput) (Backu
 	t, err := s.queries.CreateBackupTarget(ctx, database.CreateBackupTargetParams{
 		ID: NewID(), Name: strings.TrimSpace(in.Name), Provider: in.Provider, Config: cfg,
 		Path: cleanRemotePath(in.Path), IncludeVideos: in.IncludeVideos, IncludeDatabase: in.IncludeDatabase, Enabled: in.Enabled,
+		IntervalHours: int64(in.IntervalHours),
 	})
 	if err != nil {
 		return BackupTargetDTO{}, err
@@ -231,6 +254,7 @@ func (s *BackupService) Update(ctx context.Context, id string, in BackupTargetIn
 	t, err := s.queries.UpdateBackupTarget(ctx, database.UpdateBackupTargetParams{
 		ID: id, Name: strings.TrimSpace(in.Name), Config: cfg, Path: cleanRemotePath(in.Path),
 		IncludeVideos: in.IncludeVideos, IncludeDatabase: in.IncludeDatabase, Enabled: in.Enabled,
+		IntervalHours: int64(in.IntervalHours),
 	})
 	if err != nil {
 		return BackupTargetDTO{}, err
@@ -252,6 +276,9 @@ func (s *BackupService) prepareConfig(in BackupTargetInput, previous map[string]
 	}
 	if in.Provider == BackupProviderLocal && !filepath.IsAbs(in.Path) {
 		return "", errors.New("local backups need an absolute folder path")
+	}
+	if in.IntervalHours < 0 || in.IntervalHours > backupMaxInterval {
+		return "", fmt.Errorf("interval must be between 0 and %d hours", backupMaxInterval)
 	}
 	cfg := map[string]string{}
 	for _, f := range spec.Fields {
@@ -276,14 +303,16 @@ func (s *BackupService) prepareConfig(in BackupTargetInput, previous map[string]
 	return string(b), err
 }
 
-func (s *BackupService) enqueue(j backupJob) {
+func (s *BackupService) enqueue(j backupJob) bool {
 	if !s.Available() {
-		return
+		return false
 	}
 	select {
 	case s.jobs <- j:
+		return true
 	default:
 		slog.Warn("backup queue is full, dropping job")
+		return false
 	}
 }
 
@@ -294,15 +323,13 @@ func (s *BackupService) markDirty() {
 }
 
 func (s *BackupService) scheduler(ctx context.Context) {
-	debounce := time.NewTicker(backupDebounce)
-	daily := time.NewTicker(backupDailyPeriod)
-	defer debounce.Stop()
-	defer daily.Stop()
+	tick := time.NewTicker(backupDebounce)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-debounce.C:
+		case <-tick.C:
 			s.mu.Lock()
 			dirty := s.dirty
 			s.dirty = false
@@ -310,9 +337,24 @@ func (s *BackupService) scheduler(ctx context.Context) {
 			if dirty {
 				s.enqueue(backupJob{snapshot: true})
 			}
-		case <-daily.C:
-			s.enqueue(backupJob{snapshot: true})
+			s.queueDue(ctx)
 		}
+	}
+}
+
+// queueDue starts a full backup of every enabled target whose interval has passed.
+func (s *BackupService) queueDue(ctx context.Context) {
+	for _, t := range s.mustList(ctx) {
+		if !t.Enabled || t.IntervalHours <= 0 {
+			continue
+		}
+		if t.LastFullAt != nil {
+			last, err := time.Parse(time.RFC3339, *t.LastFullAt)
+			if err == nil && time.Since(last) < time.Duration(t.IntervalHours)*time.Hour {
+				continue
+			}
+		}
+		_ = s.queueFull(t.ID)
 	}
 }
 
@@ -352,6 +394,9 @@ func (s *BackupService) process(ctx context.Context, j backupJob) {
 func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, j backupJob, snapshot string) {
 	s.mu.Lock()
 	s.running[t.ID] = true
+	if j.full {
+		delete(s.queued, t.ID)
+	}
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -373,9 +418,17 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		s.recordError("rclone "+step+" ("+t.Name+")", err, output)
 	}
 
-	uploaded := 0
+	uploaded, moved := 0, 0
 	if t.IncludeVideos {
-		upload := j.upload
+		upload, remove := slices.Clone(j.upload), slices.Clone(j.remove)
+		for _, m := range j.moves {
+			if _, err := s.exec(ctx, t, nil, "moveto", s.remote(t, "downloads/"+m.From), s.remote(t, "downloads/"+m.To)); err != nil {
+				upload = append(upload, m.To)
+				remove = append(remove, m.From)
+			} else {
+				moved++
+			}
+		}
 		if j.full {
 			names, err := s.queries.ListStoredFileNames(ctx)
 			if err != nil {
@@ -387,15 +440,23 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 				}
 			}
 		}
+		upload = slices.DeleteFunc(upload, func(name string) bool {
+			_, err := os.Stat(filepath.Join(s.downloadsDir, name))
+			return err != nil
+		})
 		if len(upload) > 0 {
-			if out, err := s.exec(ctx, t, fileList(upload), "copy", "--files-from-raw", "-", "--no-traverse", s.downloadsDir, s.remote(t, "downloads")); err != nil {
+			args := []string{"copy", "--files-from-raw", "-", s.downloadsDir, s.remote(t, "downloads")}
+			if !j.full {
+				args = append(args, "--no-traverse")
+			}
+			if out, err := s.exec(ctx, t, fileList(upload), args...); err != nil {
 				fail("upload", err, out)
 			} else {
 				uploaded = len(upload)
 			}
 		}
-		if len(j.remove) > 0 {
-			if out, err := s.exec(ctx, t, fileList(j.remove), "delete", "--files-from-raw", "-", s.remote(t, "downloads")); err != nil {
+		if len(remove) > 0 {
+			if out, err := s.exec(ctx, t, fileList(remove), "delete", "--files-from-raw", "-", s.remote(t, "downloads")); err != nil {
 				fail("delete", err, out)
 			}
 		}
@@ -407,14 +468,19 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		}
 	}
 
-	worked := j.full || (t.IncludeDatabase && snapshot != "") || (t.IncludeVideos && (len(j.upload) > 0 || len(j.remove) > 0))
+	if j.full {
+		if err := s.queries.SetBackupTargetFullRun(context.Background(), t.ID); err != nil {
+			slog.Warn("failed to record full backup", "error", err)
+		}
+	}
+	worked := j.full || (t.IncludeDatabase && snapshot != "") || (t.IncludeVideos && (len(j.upload) > 0 || len(j.remove) > 0 || len(j.moves) > 0))
 	switch {
 	case len(errs) > 0:
 		s.setStatus(context.Background(), t.ID, "error", strings.Join(errs, "; "))
 	case worked:
 		s.setStatus(context.Background(), t.ID, "ok", "")
 		slog.Info("backup finished", "target", t.Name, "full", j.full, "uploaded", uploaded,
-			"removed", len(j.remove), "database", t.IncludeDatabase && snapshot != "", "took", since(started))
+			"moved", moved, "removed", len(j.remove), "database", t.IncludeDatabase && snapshot != "", "took", since(started))
 	}
 }
 
@@ -532,8 +598,8 @@ func toBackupDTO(t database.BackupTarget) BackupTargetDTO {
 	}
 	return BackupTargetDTO{
 		ID: t.ID, Name: t.Name, Provider: t.Provider, Config: cfg, Path: t.Path,
-		IncludeVideos: t.IncludeVideos, IncludeDatabase: t.IncludeDatabase, Enabled: t.Enabled,
-		LastRunAt: t.LastRunAt, LastStatus: t.LastStatus, LastError: t.LastError, CreatedAt: t.CreatedAt,
+		IncludeVideos: t.IncludeVideos, IncludeDatabase: t.IncludeDatabase, Enabled: t.Enabled, IntervalHours: int(t.IntervalHours),
+		LastRunAt: t.LastRunAt, LastFullAt: t.LastFullAt, LastStatus: t.LastStatus, LastError: t.LastError, CreatedAt: t.CreatedAt,
 	}
 }
 
