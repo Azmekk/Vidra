@@ -76,13 +76,12 @@ iOS doesn't let web apps join the share sheet, so a Shortcut sends the link to V
 1. In Vidra, open **Settings → API tokens**, create a token (e.g. "iPhone Shortcut") and copy it. It is only shown once.
 2. In the **Shortcuts** app, tap **+**. The editor opens with an empty "New Shortcut".
 3. Tap **New Shortcut ⌄** at the top and choose **Rename**. Call it "Vidra".
-4. Tap the **ⓘ** button at the bottom of the editor, turn on **Show in Share Sheet** and tap **Done**. A **Receive Any input from Share Sheet** block appears at the top of the shortcut.
-5. In that block, tap **Any**, clear the selection and pick only **URLs** and **Text**. This way Vidra only shows up when you share a link or text.
-6. In **Search Actions**, find **Get Contents of URL** and add it. Tap its **URL** placeholder and enter `https://<your-vidra>/api/videos/quick`, then expand the action (the arrow or **Show More**):
+4. Tap the **ⓘ** button at the bottom of the editor, turn on **Show in Share Sheet** and tap **Done**. A block describing what the shortcut receives appears at the top. The defaults are fine.
+5. In **Search Actions**, find **Get Contents of URL** and add it. Tap its **URL** placeholder and enter `https://<your-vidra>/api/videos/quick`, then expand the action (the arrow or **Show More**):
    - Method: **POST**
    - Headers: **Add new header**, key `Authorization`, value `Bearer <your token>`
    - Request Body: **JSON**, then **Add new field → Text**, key `url`, value **Shortcut Input** (pick it from the variables bar above the keyboard)
-7. Optionally, add **Show Notification** with "Sent to Vidra" so you get a confirmation.
+6. Optionally, add **Show Notification** with "Sent to Vidra" so you get a confirmation.
 
 In TikTok, tap **Share → More (…) → Vidra**. Apps often share text like "Check out this video! https://vm.tiktok.com/…" rather than a bare link. That's fine, because Vidra finds the link in the text.
 
