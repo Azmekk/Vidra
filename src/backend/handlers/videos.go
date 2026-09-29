@@ -501,7 +501,7 @@ func sourceVersion(v services.Video, id string) (services.VideoFile, bool) {
 func sanitizeURL(w http.ResponseWriter, raw string) (string, bool) {
 	url, err := utils.SanitizeURL(strings.TrimSpace(raw))
 	if err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid URL")
+		utils.RespondWithError(w, http.StatusBadRequest, "No valid link found in the text")
 		return "", false
 	}
 	return url, true

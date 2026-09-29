@@ -11,6 +11,7 @@ WHERE id = ?;
 WITH params AS (SELECT CAST(sqlc.arg('ordering') AS TEXT) AS ordering)
 SELECT videos.* FROM videos, params
 WHERE CAST(sqlc.arg('search') AS TEXT) = ''
+   OR id = CAST(sqlc.arg('search') AS TEXT)
    OR name LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
    OR source_title LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
    OR original_url LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
@@ -24,6 +25,7 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 -- name: CountVideos :one
 SELECT COUNT(*) FROM videos
 WHERE CAST(sqlc.arg('search') AS TEXT) = ''
+   OR id = CAST(sqlc.arg('search') AS TEXT)
    OR name LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
    OR source_title LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
    OR original_url LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%';
