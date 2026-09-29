@@ -33,11 +33,11 @@ func main() {
 	cfg := services.LoadConfig()
 
 	if err := os.MkdirAll(cfg.DownloadsDir, 0o755); err != nil {
-		log.Fatalf("❌ Cannot create downloads directory: %v", err)
+		log.Fatalf("Cannot create downloads directory: %v", err)
 	}
 	db, err := services.OpenDatabase(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("❌ %v", err)
+		log.Fatalf("%v", err)
 	}
 	defer db.Close()
 
@@ -48,7 +48,7 @@ func main() {
 
 	store := services.NewVideoStore(queries, ws)
 	if err := store.Warm(ctx, settings.MustGet(ctx).CacheSize); err != nil {
-		log.Fatalf("❌ Cannot load videos: %v", err)
+		log.Fatalf("Cannot load videos: %v", err)
 	}
 	settings.OnChange(func(s services.Settings) {
 		if err := store.Warm(context.Background(), s.CacheSize); err != nil {
@@ -70,7 +70,7 @@ func main() {
 
 	auth := services.NewAuthService(queries)
 	if err := auth.Init(ctx); err != nil {
-		log.Fatalf("❌ Cannot initialise auth: %v", err)
+		log.Fatalf("Cannot initialise auth: %v", err)
 	}
 	go auth.PruneSessions(ctx)
 	authMiddleware := &vmw.Auth{Service: auth, InsecureCookies: cfg.InsecureCookies}
@@ -120,6 +120,6 @@ func main() {
 	}
 	slog.Info("Vidra is running", "port", cfg.Port, "db", cfg.DBPath, "downloads", cfg.DownloadsDir, "insecure_cookies", cfg.InsecureCookies)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("❌ Server failed: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
 }

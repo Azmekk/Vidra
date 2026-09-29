@@ -62,7 +62,7 @@ docker run --rm --network "$NETWORK" \
   ghcr.io/azmekk/vidra:2 ./pg2sqlite -out /app/data/vidra.db -downloads /app/downloads
 ```
 
-This reads the Postgres URL from the old backend, so you never type the password. It should end with `✅ Migrated N videos and M errors`.
+This reads the Postgres URL from the old backend, so you never type the password. It should end with `Migrated N videos and M errors`.
 
 - **Migrated as-is:** every video becomes a video with one original version, and files keep their names.
 - **Migrated with changes:** settings (proxy, theme, default encoding) are converted to the new format.
