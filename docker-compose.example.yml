@@ -1,6 +1,6 @@
 services:
   vidra:
-    image: ghcr.io/azmekk/vidra:latest
+    image: ghcr.io/azmekk/vidra:2
     restart: unless-stopped
     ports:
       - "8080:8080"

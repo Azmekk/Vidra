@@ -8,6 +8,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -29,6 +31,12 @@ import (
 func main() {
 	ctx := context.Background()
 	cfg := services.LoadConfig()
+
+	if os.Getenv("DATABASE_URL") != "" {
+		if _, err := os.Stat(cfg.DBPath); errors.Is(err, fs.ErrNotExist) {
+			log.Fatal("❌ DATABASE_URL is set, but Vidra 2 stores its data in SQLite. Migrate your Vidra 1.x data first: https://github.com/Azmekk/Vidra/blob/master/docs/MIGRATING.md")
+		}
+	}
 
 	if err := os.MkdirAll(cfg.DownloadsDir, 0o755); err != nil {
 		log.Fatalf("❌ Cannot create downloads directory: %v", err)
