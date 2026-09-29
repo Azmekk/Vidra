@@ -3,6 +3,7 @@ import {
 	createRootRouteWithContext,
 	createRoute,
 	createRouter,
+	lazyRouteComponent,
 	Outlet,
 	redirect,
 } from "@tanstack/react-router";
@@ -12,11 +13,8 @@ import { getGetAuthStatusQueryOptions } from "@/api/gen/auth/auth";
 import { AppShell } from "@/components/app-shell";
 import { AuthSkeleton, LibrarySkeleton, PageSkeleton, ShellSkeleton } from "@/components/skeletons";
 import { clearCache, queryClient } from "@/lib/query";
-import { DownloadPage } from "@/routes/download";
-import { ErrorsPage } from "@/routes/errors";
 import { LibraryPage } from "@/routes/library";
 import { LoginPage } from "@/routes/login";
-import { SettingsPage } from "@/routes/settings";
 import { SetupPage } from "@/routes/setup";
 
 const authStatus = () => queryClient.ensureQueryData(getGetAuthStatusQueryOptions());
@@ -77,24 +75,26 @@ const downloadRoute = createRoute({
 	path: "/download",
 	validateSearch: z.object({
 		url: z.string().optional(),
+		text: z.string().optional(),
+		title: z.string().optional(),
 		quick: z.coerce.boolean().optional(),
 	}),
 	pendingComponent: PageSkeleton,
-	component: DownloadPage,
+	component: lazyRouteComponent(() => import("@/routes/download"), "DownloadPage"),
 });
 
 const settingsRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/settings",
 	pendingComponent: PageSkeleton,
-	component: SettingsPage,
+	component: lazyRouteComponent(() => import("@/routes/settings"), "SettingsPage"),
 });
 
 const errorsRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/errors",
 	pendingComponent: PageSkeleton,
-	component: ErrorsPage,
+	component: lazyRouteComponent(() => import("@/routes/errors"), "ErrorsPage"),
 });
 
 const routeTree = rootRoute.addChildren([

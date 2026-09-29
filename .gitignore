@@ -6,3 +6,4 @@ node_modules/
 dist/
 tmp/
 *.log
+.playwright-mcp/

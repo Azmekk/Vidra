@@ -25,7 +25,11 @@ root.render(
 		>
 			<TooltipProvider>
 				<RouterProvider router={router} />
-				<Toaster position="top-center" richColors />
+				<Toaster
+					position="top-center"
+					richColors
+					mobileOffset={{ top: "calc(env(safe-area-inset-top) + 12px)" }}
+				/>
 			</TooltipProvider>
 		</PersistQueryClientProvider>
 	</StrictMode>,

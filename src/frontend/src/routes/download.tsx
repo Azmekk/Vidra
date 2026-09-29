@@ -25,7 +25,8 @@ export function DownloadPage() {
 	const search = route.useSearch();
 	const navigate = useNavigate();
 	const qc = useQueryClient();
-	const [url, setUrl] = useState(search.url ? extractUrl(search.url) : "");
+	const shared = search.url ?? search.text ?? search.title;
+	const [url, setUrl] = useState(shared ? extractUrl(shared) : "");
 	const [error, setError] = useState<string>();
 	const metadata = useGetMetadata();
 	const quick = useQuickDownload({
@@ -40,10 +41,10 @@ export function DownloadPage() {
 
 	const autoStarted = useRef(false);
 	useEffect(() => {
-		if (autoStarted.current || !search.quick || !search.url) return;
+		if (autoStarted.current || !search.quick || !shared) return;
 		autoStarted.current = true;
-		quick.mutate({ data: { url: search.url } });
-	}, [search.quick, search.url, quick]);
+		quick.mutate({ data: { url: shared } });
+	}, [search.quick, shared, quick]);
 
 	const validate = () => {
 		const clean = extractUrl(url);
