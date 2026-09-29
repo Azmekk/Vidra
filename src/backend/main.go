@@ -16,12 +16,14 @@ import (
 	"github.com/Azmekk/Vidra/backend/gen/database"
 	_ "github.com/Azmekk/Vidra/backend/gen/docs/swagger"
 	"github.com/Azmekk/Vidra/backend/handlers"
+	vmw "github.com/Azmekk/Vidra/backend/middleware"
 	"github.com/Azmekk/Vidra/backend/routers"
 	"github.com/Azmekk/Vidra/backend/services"
 	"github.com/Azmekk/Vidra/backend/services/encoding"
 	"github.com/Azmekk/Vidra/backend/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
@@ -59,22 +61,47 @@ func main() {
 
 	videoHandler := handlers.NewVideoHandler(store, downloader, ytdlp, settings)
 
+	auth := services.NewAuthService(queries)
+	if err := auth.Init(ctx); err != nil {
+		log.Fatalf("❌ Cannot initialise auth: %v", err)
+	}
+	go auth.PruneSessions(ctx)
+	authMiddleware := &vmw.Auth{Service: auth, InsecureCookies: cfg.InsecureCookies}
+	authHandler := handlers.NewAuthHandler(authMiddleware)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
 	r.Route("/api", func(r chi.Router) {
-		r.Get("/ws", ws.HandleConnections)
-		r.Mount("/videos", routers.VideoRouter(videoHandler))
-		r.Mount("/files", routers.FileRouter(videoHandler))
-		r.Mount("/encoding", routers.EncodingRouter(handlers.NewEncodingHandler(store, caps)))
-		r.Mount("/errors", routers.ErrorRouter(handlers.NewErrorHandler(queries)))
-		r.Mount("/yt-dlp", routers.YtDlpRouter(handlers.NewYtDlpHandler(ytdlp)))
-		r.Mount("/system", routers.SystemRouter(handlers.NewSystemHandler(cfg.DownloadsDir)))
-		r.Mount("/settings", routers.SettingsRouter(handlers.NewSettingsHandler(settings, caps)))
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/status", authHandler.GetStatus)
+			r.Post("/logout", authHandler.Logout)
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/login", authHandler.Login)
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/setup", authHandler.Setup)
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireAuth)
+				r.Put("/password", authHandler.ChangePassword)
+				r.Get("/tokens", authHandler.ListAPITokens)
+				r.Post("/tokens", authHandler.CreateAPIToken)
+				r.Delete("/tokens/{id}", authHandler.DeleteAPIToken)
+			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.RequireAuth)
+			r.Get("/ws", ws.HandleConnections)
+			r.Mount("/videos", routers.VideoRouter(videoHandler))
+			r.Mount("/files", routers.FileRouter(videoHandler))
+			r.Mount("/encoding", routers.EncodingRouter(handlers.NewEncodingHandler(store, caps)))
+			r.Mount("/errors", routers.ErrorRouter(handlers.NewErrorHandler(queries)))
+			r.Mount("/yt-dlp", routers.YtDlpRouter(handlers.NewYtDlpHandler(ytdlp)))
+			r.Mount("/system", routers.SystemRouter(handlers.NewSystemHandler(cfg.DownloadsDir)))
+			r.Mount("/settings", routers.SettingsRouter(handlers.NewSettingsHandler(settings, caps)))
+		})
 	})
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	r.With(authMiddleware.RequireAuth).Get("/swagger/*", httpSwagger.WrapHandler)
 	r.Handle("/*", web.Handler())
 
 	server := &http.Server{
