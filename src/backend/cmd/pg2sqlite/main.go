@@ -47,7 +47,7 @@ func main() {
 		log.Fatal("missing -pg connection URL")
 	}
 	if err := run(context.Background(), *pgURL, *out, *downloads, *force); err != nil {
-		log.Fatalf("❌ %v", err)
+		log.Fatalf("%v", err)
 	}
 }
 
@@ -125,7 +125,7 @@ func run(ctx context.Context, pgURL, out, downloads string, force bool) error {
 		return err
 	}
 
-	log.Printf("✅ Migrated %d videos and %d errors into %s", len(videos), len(errs), out)
+	log.Printf("Migrated %d videos and %d errors into %s", len(videos), len(errs), out)
 	return nil
 }
 

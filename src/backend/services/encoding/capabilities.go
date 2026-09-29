@@ -142,7 +142,7 @@ func Detect(ctx context.Context) *Capabilities {
 			available++
 		}
 	}
-	log.Printf("🎞️  ffmpeg %s: %d video / %d audio encoders, %d working hardware encoders\n",
+	log.Printf("ffmpeg %s: %d video / %d audio encoders, %d working hardware encoders\n",
 		version, len(caps.Video), len(caps.Audio), available)
 	return caps
 }

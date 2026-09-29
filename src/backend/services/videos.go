@@ -142,7 +142,7 @@ func (s *VideoStore) warmLocked(ctx context.Context) error {
 		return err
 	}
 	s.recent, s.total = videos, total
-	log.Printf("🗃️  Video cache warmed with %d of %d videos\n", len(videos), total)
+	log.Printf("Video cache warmed with %d of %d videos\n", len(videos), total)
 	return nil
 }
 

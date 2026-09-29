@@ -8,8 +8,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
@@ -34,18 +32,12 @@ func main() {
 	ctx := context.Background()
 	cfg := services.LoadConfig()
 
-	if os.Getenv("DATABASE_URL") != "" {
-		if _, err := os.Stat(cfg.DBPath); errors.Is(err, fs.ErrNotExist) {
-			log.Fatal("❌ DATABASE_URL is set, but Vidra 2 stores its data in SQLite. Migrate your Vidra 1.x data first: https://github.com/Azmekk/Vidra/blob/master/docs/MIGRATING.md")
-		}
-	}
-
 	if err := os.MkdirAll(cfg.DownloadsDir, 0o755); err != nil {
-		log.Fatalf("❌ Cannot create downloads directory: %v", err)
+		log.Fatalf("Cannot create downloads directory: %v", err)
 	}
 	db, err := services.OpenDatabase(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("❌ %v", err)
+		log.Fatalf("%v", err)
 	}
 	defer db.Close()
 
@@ -56,7 +48,7 @@ func main() {
 
 	store := services.NewVideoStore(queries, ws)
 	if err := store.Warm(ctx, settings.MustGet(ctx).CacheSize); err != nil {
-		log.Fatalf("❌ Cannot load videos: %v", err)
+		log.Fatalf("Cannot load videos: %v", err)
 	}
 	settings.OnChange(func(s services.Settings) {
 		if err := store.Warm(context.Background(), s.CacheSize); err != nil {
@@ -78,7 +70,7 @@ func main() {
 
 	auth := services.NewAuthService(queries)
 	if err := auth.Init(ctx); err != nil {
-		log.Fatalf("❌ Cannot initialise auth: %v", err)
+		log.Fatalf("Cannot initialise auth: %v", err)
 	}
 	go auth.PruneSessions(ctx)
 	authMiddleware := &vmw.Auth{Service: auth, InsecureCookies: cfg.InsecureCookies}
@@ -128,6 +120,6 @@ func main() {
 	}
 	slog.Info("Vidra is running", "port", cfg.Port, "db", cfg.DBPath, "downloads", cfg.DownloadsDir, "insecure_cookies", cfg.InsecureCookies)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("❌ Server failed: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
 }

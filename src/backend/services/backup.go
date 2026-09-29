@@ -128,7 +128,7 @@ func (s *BackupService) Version() string { return s.version }
 // Start runs the upload worker and the snapshot scheduler until ctx ends.
 func (s *BackupService) Start(ctx context.Context) {
 	if !s.Available() {
-		log.Println("☁️  rclone not found, backups are disabled")
+		log.Println("rclone not found, backups are disabled")
 		return
 	}
 	for _, t := range s.mustList(ctx) {

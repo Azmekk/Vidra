@@ -67,7 +67,7 @@ func (s *AuthService) Init(ctx context.Context) error {
 	_, _ = rand.Read(code)
 	s.setupCode = strings.ToUpper(hex.EncodeToString(code))
 	s.mu.Unlock()
-	log.Printf("🔑 No account exists yet. Open Vidra and use setup code: %s\n", s.setupCode)
+	log.Printf("No account exists yet. Open Vidra and use setup code: %s\n", s.setupCode)
 	return nil
 }
 
