@@ -42,6 +42,8 @@ docker compose up -d
 docker compose logs vidra | grep "setup code"
 ```
 
+The example pins `ghcr.io/azmekk/vidra:2`, which gets every 2.x update but never a breaking major release. `:latest` follows `master`.
+
 Open Vidra, enter the setup code from the log and create your account. The code is only printed while no account exists.
 
 Vidra is meant to run behind HTTPS (Caddy, Traefik, Cloudflare Tunnel, …). Session cookies are `Secure`, and Save to Photos needs a secure context. To try it over plain HTTP on your LAN, set `VIDRA_INSECURE_COOKIES=true`.
@@ -59,15 +61,37 @@ Everything else, including proxy, concurrency, default encoding and backups, liv
 
 When a reverse proxy runs on the same host or Docker network, Vidra trusts its `X-Forwarded-For` header for rate limiting. Requests from public addresses are keyed by their own IP.
 
-## iPhone
+## Phones
 
-1. Open Vidra in Safari and choose **Share → Add to Home Screen**.
-2. For sharing straight from other apps, create an API token in **Settings → API tokens** and make a Shortcut that accepts URLs and text from the share sheet and runs **Get Contents of URL**:
-   - URL: `https://your-vidra/api/videos/quick`
-   - Method: `POST`, header `Authorization: Bearer <token>`
-   - JSON body: `url` = *Shortcut Input*
+Open Vidra in Safari (iPhone) or Chrome (Android) and add it to the home screen: **Share → Add to Home Screen** or **⋮ → Install app**.
 
-   Vidra pulls the link out of whatever text the app shares. Alternatively, have the Shortcut open `https://your-vidra/download?quick=1&url=<Shortcut Input>`.
+### Share to Vidra on Android
+
+Once installed, Vidra appears in the share sheet of every app. Sharing a video from TikTok, Instagram, YouTube and others opens the download page with the link already filled in.
+
+### Share to Vidra on iPhone
+
+iOS doesn't let web apps join the share sheet, so a Shortcut sends the link to Vidra instead. You set it up once. After that, sharing is **Share → Vidra** and the download starts on the server without opening anything.
+
+1. In Vidra, open **Settings → API tokens**, create a token (e.g. "iPhone Shortcut") and copy it. It is only shown once.
+2. In the **Shortcuts** app, tap **+** and name the shortcut "Vidra".
+3. Open the shortcut's details (**ⓘ**), turn on **Show in Share Sheet**, and set the accepted types to **URLs** and **Text**.
+4. Add the action **Get Contents of URL** and expand it:
+   - URL: `https://<your-vidra>/api/videos/quick`
+   - Method: **POST**
+   - Headers: `Authorization` = `Bearer <your token>`
+   - Request Body: **JSON**, with one field, key `url` and value **Shortcut Input**
+5. Optionally, add **Show Notification** ("Sent to Vidra") as a confirmation.
+
+In TikTok, tap **Share → More (…) → Vidra**. Apps often share text like "Check out this video! https://vm.tiktok.com/…" rather than a bare link. That's fine, because Vidra finds the link in the text.
+
+A few things to know:
+
+- **Encoding:** quick downloads use your default encoding from Settings.
+- **Names:** shared videos get a random name. Tap the pencil in the library to rename; the card suggests the video's original title.
+- **Reaching Vidra:** the phone must be able to reach your Vidra address, e.g. on your home network or over a VPN such as Tailscale.
+- **Security:** a token can do everything your account can. If it leaks, delete it in Settings and it stops working immediately.
+- **Opening Vidra instead:** to pick the format first, have the Shortcut run **Open URLs** with `https://<your-vidra>/download?url=<Shortcut Input>` instead. Adding `&quick=1` starts a quick download.
 
 ## Backups
 
@@ -82,15 +106,9 @@ Finished versions and thumbnails upload as they complete, deleted ones are remov
 
 ## Migrating from Vidra 1.x (Postgres)
 
-The image includes `pg2sqlite`. Stop the old stack, keep its `downloads` folder, and run:
+Vidra 2 is a breaking release: one container and SQLite instead of Postgres, a backend, a frontend and nginx. 1.x images (`vidra-backend`, `vidra-frontend`) are no longer updated, so existing installs keep running until you migrate.
 
-```bash
-docker run --rm --network <old-network> -v ./data:/app/data -v ./downloads:/app/downloads ghcr.io/azmekk/vidra:latest \
-  ./pg2sqlite --pg "postgres://postgres:password@db:5432/vidra?sslmode=disable" \
-  --out /app/data/vidra.db --downloads /app/downloads
-```
-
-Every old video becomes a video with one original version, and files on disk keep their names. Then start the new compose file with the same `downloads` folder.
+Follow [docs/MIGRATING.md](docs/MIGRATING.md). It copies your videos, errors and settings with the bundled `pg2sqlite`, hardlinks your downloads instead of copying them and leaves the old stack intact for rollback.
 
 ## Development
 
