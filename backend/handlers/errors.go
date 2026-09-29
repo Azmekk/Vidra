@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/Azmekk/Vidra/backend/utils"
 )
 
 type ErrorHandler struct {
@@ -18,24 +17,13 @@ func NewErrorHandler(queries *database.Queries) *ErrorHandler {
 }
 
 type ErrorResponse struct {
-	ID           string `json:"id"`
-	VideoID      string `json:"videoId"`
-	ErrorMessage string `json:"errorMessage"`
-	Command      string `json:"command"`
-	Output       string `json:"output"`
-	CreatedAt    string `json:"createdAt"`
-}
-
-func mapErrorToResponse(e database.Error) ErrorResponse {
-
-	return ErrorResponse{
-		ID:           e.ID.String(),
-		VideoID:      e.VideoID.String(),
-		ErrorMessage: e.ErrorMessage,
-		Command:      e.Command,
-		Output:       e.Output,
-		CreatedAt:    e.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-	}
+	ID           string  `json:"id"`
+	VideoID      *string `json:"videoId,omitempty"`
+	FileID       *string `json:"fileId,omitempty"`
+	ErrorMessage string  `json:"errorMessage"`
+	Command      string  `json:"command"`
+	Output       string  `json:"output"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 type PaginatedErrorResponse struct {
@@ -48,75 +36,44 @@ type PaginatedErrorResponse struct {
 
 // ListRecentErrors godoc
 // @Summary List recent errors
-// @Description Get a paginated list of the most recent system errors with optional searching
 // @ID listRecentErrors
 // @Tags errors
-// @Accept json
 // @Produce json
-// @Param search query string false "Search by error message or command"
+// @Param search query string false "Search by message, command or video ID"
 // @Param page query int false "Page number (default: 1)"
-// @Param limit query int false "Number of items per page (default: 10)"
+// @Param limit query int false "Items per page (default: 10)"
 // @Success 200 {object} PaginatedErrorResponse
-// @Failure 500 {object} map[string]string
+// @Failure 500 {object} utils.ErrorResponse
 // @Router /api/errors [get]
 func (h *ErrorHandler) ListRecentErrors(w http.ResponseWriter, r *http.Request) {
-	search := r.URL.Query().Get("search")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	page, limit := utils.Pagination(r, 10)
 
-	page := 1
-	limit := 10
-
-	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-		page = p
-	}
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-		limit = l
-	}
-
-	offset := (page - 1) * limit
-
-	searchParam := pgtype.Text{String: search, Valid: true}
-
-	totalCount, err := h.Queries.CountErrors(r.Context(), searchParam)
+	total, err := h.Queries.CountErrors(r.Context(), search)
 	if err != nil {
-		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	errors, err := h.Queries.ListRecentErrors(r.Context(), database.ListRecentErrorsParams{
-		Search: searchParam,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+	rows, err := h.Queries.ListRecentErrors(r.Context(), database.ListRecentErrorsParams{
+		Search: search, Limit: int64(limit), Offset: int64((page - 1) * limit),
 	})
 	if err != nil {
-		h.respondWithError(w, http.StatusInternalServerError, err.Error())
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	responses := make([]ErrorResponse, len(errors))
-	for i, e := range errors {
-		responses[i] = mapErrorToResponse(e)
+	errs := make([]ErrorResponse, len(rows))
+	for i, e := range rows {
+		errs[i] = ErrorResponse{
+			ID: e.ID, VideoID: e.VideoID, FileID: e.FileID, ErrorMessage: e.ErrorMessage,
+			Command: e.Command, Output: e.Output, CreatedAt: e.CreatedAt,
+		}
 	}
-
-	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
-
-	h.respondWithJSON(w, http.StatusOK, PaginatedErrorResponse{
-		TotalCount:  totalCount,
-		TotalPages:  totalPages,
+	utils.RespondWithJSON(w, http.StatusOK, PaginatedErrorResponse{
+		TotalCount:  total,
+		TotalPages:  int((total + int64(limit) - 1) / int64(limit)),
 		CurrentPage: page,
 		Limit:       limit,
-		Errors:      responses,
+		Errors:      errs,
 	})
-}
-
-func (h *ErrorHandler) respondWithError(w http.ResponseWriter, code int, message string) {
-	h.respondWithJSON(w, code, map[string]string{"error": message})
-}
-
-func (h *ErrorHandler) respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
 }

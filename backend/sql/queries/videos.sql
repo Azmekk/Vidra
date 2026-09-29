@@ -1,54 +1,55 @@
 -- name: CreateVideo :one
-INSERT INTO videos (
-    name, file_name, thumbnail_file_name, original_url, download_status
-) VALUES (
-    $1, $2, $3, $4, $5
-)
+INSERT INTO videos (id, name, source_title, original_url)
+VALUES (?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetVideo :one
 SELECT * FROM videos
-WHERE id = $1 LIMIT 1;
+WHERE id = ?;
 
 -- name: ListVideos :many
-SELECT * FROM videos
-WHERE (name ILIKE '%' || sqlc.arg('search') || '%' OR original_url ILIKE '%' || sqlc.arg('search') || '%')
-ORDER BY 
-    CASE WHEN sqlc.arg('ordering') = 'name_asc' THEN name END ASC,
-    CASE WHEN sqlc.arg('ordering') = 'name_desc' THEN name END DESC,
-    CASE WHEN sqlc.arg('ordering') = 'created_at_asc' THEN created_at END ASC,
-    CASE WHEN sqlc.arg('ordering') = 'status_asc' THEN download_status END ASC,
-    CASE WHEN sqlc.arg('ordering') = 'status_desc' THEN download_status END DESC,
-    CASE WHEN sqlc.arg('ordering') = 'created_at_desc' OR sqlc.arg('ordering') = '' OR sqlc.arg('ordering') IS NULL THEN created_at END DESC
-LIMIT $1 OFFSET $2;
+WITH params AS (SELECT CAST(sqlc.arg('ordering') AS TEXT) AS ordering)
+SELECT videos.* FROM videos, params
+WHERE CAST(sqlc.arg('search') AS TEXT) = ''
+   OR name LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
+   OR source_title LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
+   OR original_url LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
+ORDER BY
+    CASE WHEN params.ordering = 'name_asc' THEN name END ASC,
+    CASE WHEN params.ordering = 'name_desc' THEN name END DESC,
+    CASE WHEN params.ordering = 'created_at_asc' THEN created_at END ASC,
+    created_at DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountVideos :one
 SELECT COUNT(*) FROM videos
-WHERE (name ILIKE '%' || sqlc.arg('search') || '%' OR original_url ILIKE '%' || sqlc.arg('search') || '%');
-
--- name: UpdateVideoStatus :one
-UPDATE videos
-  set download_status = $2,
-  updated_at = NOW()
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateVideoFiles :one
-UPDATE videos
-  set file_name = $2,
-  thumbnail_file_name = $3,
-  file_size = $4,
-  updated_at = NOW()
-WHERE id = $1
-RETURNING *;
+WHERE CAST(sqlc.arg('search') AS TEXT) = ''
+   OR name LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
+   OR source_title LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%'
+   OR original_url LIKE '%' || CAST(sqlc.arg('search') AS TEXT) || '%';
 
 -- name: UpdateVideoName :one
 UPDATE videos
-  set name = $2,
-  updated_at = NOW()
-WHERE id = $1
+SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?
+RETURNING *;
+
+-- name: UpdateVideoSource :one
+UPDATE videos
+SET source_title = COALESCE(sqlc.narg('source_title'), source_title),
+    thumbnail_file_name = COALESCE(sqlc.narg('thumbnail_file_name'), thumbnail_file_name),
+    duration = COALESCE(sqlc.narg('duration'), duration),
+    uploader = COALESCE(sqlc.narg('uploader'), uploader),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: SetPrimaryFile :one
+UPDATE videos
+SET primary_file_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ?
 RETURNING *;
 
 -- name: DeleteVideo :exec
 DELETE FROM videos
-WHERE id = $1;
+WHERE id = ?;

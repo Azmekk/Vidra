@@ -10,54 +10,48 @@ type YtdlpService struct {
 }
 
 type YtdlpDownloadOptions struct {
-	FormatID          string
-	OutputPattern     string
-	WriteThumbnail    bool
-	ConvertThumbnails string
+	Format        string
+	OutputPattern string
 }
 
 func NewYtdlpService(settings *SettingsService) *YtdlpService {
-	return &YtdlpService{
-		settings: settings,
-	}
+	return &YtdlpService{settings: settings}
 }
 
-// baseArgs returns common arguments including proxy if configured
 func (s *YtdlpService) baseArgs(ctx context.Context) []string {
-	args := []string{}
-	if proxyURL := s.settings.GetProxyURL(ctx); proxyURL != "" {
+	args := []string{"--no-warnings", "--ignore-config"}
+	if proxyURL := s.settings.MustGet(ctx).ProxyURL; proxyURL != "" {
 		args = append(args, "--proxy", proxyURL)
 	}
 	return args
 }
 
-// MetadataCommand builds a yt-dlp command for fetching video metadata
 func (s *YtdlpService) MetadataCommand(ctx context.Context, url string) *exec.Cmd {
-	args := []string{"--dump-json", "--flat-playlist", "--no-warnings"}
-	args = append(args, s.baseArgs(ctx)...)
-	args = append(args, url)
-	return exec.CommandContext(ctx, "yt-dlp", args...)
+	args := append([]string{"--dump-json", "--no-playlist"}, s.baseArgs(ctx)...)
+	return exec.CommandContext(ctx, "yt-dlp", append(args, "--", url)...)
 }
 
-// DownloadCommand builds a yt-dlp command for downloading a video
+// DownloadCommand downloads a single video plus its thumbnail and info JSON.
 func (s *YtdlpService) DownloadCommand(ctx context.Context, url string, opts YtdlpDownloadOptions) *exec.Cmd {
-	args := []string{"-f", opts.FormatID, "-o", opts.OutputPattern, "--newline"}
-
-	if opts.WriteThumbnail {
-		args = append(args, "--write-thumbnail")
+	args := []string{
+		"-o", opts.OutputPattern,
+		"--newline",
+		"--no-playlist",
+		"--no-part",
+		"--concurrent-fragments", "4",
+		"--write-thumbnail", "--convert-thumbnails", "jpg",
+		"--write-info-json", "--no-clean-info-json",
 	}
-	if opts.ConvertThumbnails != "" {
-		args = append(args, "--convert-thumbnails", opts.ConvertThumbnails)
+	if opts.Format != "" {
+		args = append(args, "-f", opts.Format)
 	}
-
+	if s.settings.MustGet(ctx).PreferCompatibleFormats {
+		args = append(args, "-S", "vcodec:h264,res,acodec:m4a", "--merge-output-format", "mp4")
+	}
 	args = append(args, s.baseArgs(ctx)...)
-	args = append(args, url)
-	return exec.Command("yt-dlp", args...)
+	return exec.CommandContext(ctx, "yt-dlp", append(args, "--", url)...)
 }
 
-// UpdateCommand builds a yt-dlp command for updating yt-dlp itself
 func (s *YtdlpService) UpdateCommand(ctx context.Context) *exec.Cmd {
-	args := []string{"-U"}
-	args = append(args, s.baseArgs(ctx)...)
-	return exec.CommandContext(ctx, "yt-dlp", args...)
+	return exec.CommandContext(ctx, "yt-dlp", append([]string{"-U"}, s.baseArgs(ctx)...)...)
 }

@@ -4,25 +4,31 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// WsEventType represents WebSocket event types
 type WsEventType string
 
 const (
-	WsEventProgress     WsEventType = "progress"
 	WsEventVideoCreated WsEventType = "video_created"
+	WsEventVideoUpdated WsEventType = "video_updated"
 	WsEventVideoDeleted WsEventType = "video_deleted"
+	WsEventFileProgress WsEventType = "file_progress"
+	WsEventBackupStatus WsEventType = "backup_status"
+)
+
+const (
+	wsSendBuffer = 64
+	wsWriteWait  = 10 * time.Second
+	wsPongWait   = 60 * time.Second
+	wsPingPeriod = 50 * time.Second
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
-	},
+	WriteBufferSize: 4096,
 }
 
 type WsEvent struct {
@@ -30,54 +36,20 @@ type WsEvent struct {
 	Payload any         `json:"payload"`
 }
 
+type wsClient struct {
+	conn *websocket.Conn
+	send chan WsEvent
+}
+
+// WebSocketService fans events out to connected clients. Each client has its
+// own buffered queue so a slow phone never stalls a download.
 type WebSocketService struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan WsEvent
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	mu         sync.Mutex
+	mu      sync.RWMutex
+	clients map[*wsClient]struct{}
 }
 
 func NewWebSocketService() *WebSocketService {
-	return &WebSocketService{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan WsEvent),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
-	}
-}
-
-func (s *WebSocketService) Run() {
-	for {
-		select {
-		case client := <-s.register:
-			s.mu.Lock()
-			s.clients[client] = true
-			s.mu.Unlock()
-			log.Println("WebSocket client registered")
-
-		case client := <-s.unregister:
-			s.mu.Lock()
-			if _, ok := s.clients[client]; ok {
-				delete(s.clients, client)
-				client.Close()
-				log.Println("WebSocket client unregistered")
-			}
-			s.mu.Unlock()
-
-		case event := <-s.broadcast:
-			s.mu.Lock()
-			for client := range s.clients {
-				err := client.WriteJSON(event)
-				if err != nil {
-					log.Printf("WebSocket error: %v", err)
-					client.Close()
-					delete(s.clients, client)
-				}
-			}
-			s.mu.Unlock()
-		}
-	}
+	return &WebSocketService{clients: map[*wsClient]struct{}{}}
 }
 
 func (s *WebSocketService) HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -86,25 +58,73 @@ func (s *WebSocketService) HandleConnections(w http.ResponseWriter, r *http.Requ
 		log.Printf("Failed to upgrade connection: %v", err)
 		return
 	}
-	s.register <- conn
+	c := &wsClient{conn: conn, send: make(chan WsEvent, wsSendBuffer)}
+	s.mu.Lock()
+	s.clients[c] = struct{}{}
+	s.mu.Unlock()
 
-	// Keep connection alive and listen for close
-	go func() {
-		defer func() {
-			s.unregister <- conn
-		}()
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				break
-			}
-		}
-	}()
+	go s.writeLoop(c)
+	go s.readLoop(c)
 }
 
-func (s *WebSocketService) Broadcast(eventType WsEventType, payload interface{}) {
-	s.broadcast <- WsEvent{
-		Type:    eventType,
-		Payload: payload,
+func (s *WebSocketService) Broadcast(eventType WsEventType, payload any) {
+	event := WsEvent{Type: eventType, Payload: payload}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for c := range s.clients {
+		select {
+		case c.send <- event:
+		default:
+			go s.remove(c)
+		}
+	}
+}
+
+func (s *WebSocketService) remove(c *wsClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.clients[c]; ok {
+		delete(s.clients, c)
+		close(c.send)
+	}
+}
+
+func (s *WebSocketService) readLoop(c *wsClient) {
+	defer s.remove(c)
+	c.conn.SetReadLimit(512)
+	_ = c.conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	})
+	for {
+		if _, _, err := c.conn.ReadMessage(); err != nil {
+			return
+		}
+	}
+}
+
+func (s *WebSocketService) writeLoop(c *wsClient) {
+	ticker := time.NewTicker(wsPingPeriod)
+	defer func() {
+		ticker.Stop()
+		_ = c.conn.Close()
+	}()
+	for {
+		select {
+		case event, ok := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if !ok {
+				_ = c.conn.WriteMessage(websocket.CloseMessage, nil)
+				return
+			}
+			if err := c.conn.WriteJSON(event); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
 	}
 }

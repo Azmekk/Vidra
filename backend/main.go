@@ -1,10 +1,8 @@
 // @title Vidra API
-// @version 1.0
+// @version 2.0
 // @description REST API for Vidra video downloader and manager
-// @termsOfService https://github.com/Azmekk/Vidra
 // @contact.name Martin Yordanov
 // @contact.url https://github.com/Azmekk/Vidra
-// @contact.email martin.yordanov@vexbyte.com
 // @BasePath /
 package main
 
@@ -13,70 +11,79 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"time"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
+	_ "github.com/Azmekk/Vidra/backend/gen/docs/swagger"
 	"github.com/Azmekk/Vidra/backend/handlers"
 	"github.com/Azmekk/Vidra/backend/routers"
 	"github.com/Azmekk/Vidra/backend/services"
-	"github.com/go-chi/chi/middleware"
+	"github.com/Azmekk/Vidra/backend/services/encoding"
+	"github.com/Azmekk/Vidra/backend/web"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
-
-	_ "github.com/Azmekk/Vidra/backend/gen/docs/swagger"
 )
 
 func main() {
 	ctx := context.Background()
-	pool, port := services.Bootstrap(ctx)
-	defer pool.Close()
+	cfg := services.LoadConfig()
 
-	queries := database.New(pool)
-	wsService := services.NewWebSocketService()
-	go wsService.Run()
+	if err := os.MkdirAll(cfg.DownloadsDir, 0o755); err != nil {
+		log.Fatalf("❌ Cannot create downloads directory: %v", err)
+	}
+	db, err := services.OpenDatabase(cfg.DBPath)
+	if err != nil {
+		log.Fatalf("❌ %v", err)
+	}
+	defer db.Close()
 
-	settingsService := services.NewSettingsService(queries)
-	ytdlpService := services.NewYtdlpService(settingsService)
-	downloader := services.NewDownloaderService(queries, wsService, ytdlpService)
-	videoHandler := handlers.NewVideoHandler(queries, downloader, wsService)
-	errorHandler := handlers.NewErrorHandler(queries)
-	ytdlpHandler := handlers.NewYtDlpHandler(queries, downloader)
-	systemHandler := handlers.NewSystemHandler()
-	settingsHandler := handlers.NewSettingsHandler(settingsService)
+	queries := database.New(db)
+	ws := services.NewWebSocketService()
+	settings := services.NewSettingsService(queries)
+	caps := encoding.Detect(ctx)
+
+	store := services.NewVideoStore(queries, ws)
+	if err := store.Warm(ctx, settings.MustGet(ctx).CacheSize); err != nil {
+		log.Fatalf("❌ Cannot load videos: %v", err)
+	}
+	settings.OnChange(func(s services.Settings) {
+		if err := store.Warm(context.Background(), s.CacheSize); err != nil {
+			log.Printf("WARN: failed to resize video cache: %v\n", err)
+		}
+	})
+
+	ytdlp := services.NewYtdlpService(settings)
+	downloader := services.NewDownloaderService(store, queries, ws, settings, ytdlp, caps, cfg.DownloadsDir)
+	downloader.RecoverInterrupted(ctx)
+
+	videoHandler := handlers.NewVideoHandler(store, downloader, ytdlp, settings)
 
 	r := chi.NewRouter()
-
-	// Middleware
-	//r.Use(middleware.Logger)
+	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.GetHead)
 
-	// WebSocket endpoint
-	r.Get("/api/ws", wsService.HandleConnections)
-
-	// Swagger documentation
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/ws", ws.HandleConnections)
+		r.Mount("/videos", routers.VideoRouter(videoHandler))
+		r.Mount("/files", routers.FileRouter(videoHandler))
+		r.Mount("/encoding", routers.EncodingRouter(handlers.NewEncodingHandler(store, caps)))
+		r.Mount("/errors", routers.ErrorRouter(handlers.NewErrorHandler(queries)))
+		r.Mount("/yt-dlp", routers.YtDlpRouter(handlers.NewYtDlpHandler(ytdlp)))
+		r.Mount("/system", routers.SystemRouter(handlers.NewSystemHandler(cfg.DownloadsDir)))
+		r.Mount("/settings", routers.SettingsRouter(handlers.NewSettingsHandler(settings, caps)))
+	})
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	r.Handle("/*", web.Handler())
 
-	// Mount routes
-	r.Mount("/api/videos", routers.VideoRouter(videoHandler))
-	r.Mount("/api/errors", routers.ErrorRouter(errorHandler))
-	r.Mount("/api/yt-dlp", routers.YtDlpRouter(ytdlpHandler))
-	r.Mount("/api/system", routers.SystemRouter(systemHandler))
-	r.Mount("/api/settings", routers.SettingsRouter(settingsHandler))
-
-	// Serve downloads folder locally if VIDRA_DEV_ENVIRONMENT=true
-	if os.Getenv("VIDRA_DEV_ENVIRONMENT") == "true" {
-		workDir, _ := os.Getwd()
-		filesDir := http.Dir(filepath.Join(workDir, "downloads"))
-		r.Handle("/downloads/*", http.StripPrefix("/downloads/", http.FileServer(filesDir)))
-		log.Println("📂 Serving /downloads locally (DEV mode)")
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	// Start server
-	addr := ":" + port
-	log.Printf("🌐 Server is running on http://localhost%s\n", addr)
-	log.Println("✨ Ready to handle requests!")
-
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("❌ Server failed to start: %v", err)
+	log.Printf("🌐 Vidra is running on http://localhost:%s\n", cfg.Port)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("❌ Server failed: %v", err)
 	}
 }

@@ -1,581 +1,474 @@
 package services
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
-	"github.com/Azmekk/Vidra/backend/utils"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/Azmekk/Vidra/backend/services/encoding"
 )
 
-type VideoOption struct {
-	FormatID   string  `json:"format_id"`
-	Extension  string  `json:"extension"`
-	Resolution string  `json:"resolution"`
-	Note       string  `json:"note"`
-	FileSize   float64 `json:"file_size"`
-	VCodec     string  `json:"vcodec"`
-	ACodec     string  `json:"acodec"`
-}
-
-type VideoMetadata struct {
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Duration    float64       `json:"duration"`
-	Thumbnail   string        `json:"thumbnail"`
-	Options     []VideoOption `json:"options"`
-}
-
-type DownloadStatus string
-
-const (
-	StatusPending     DownloadStatus = "pending"
-	StatusDownloading DownloadStatus = "downloading"
-	StatusEncoding    DownloadStatus = "encoding"
-	StatusFinished    DownloadStatus = "completed"
-	StatusError       DownloadStatus = "error"
+var (
+	ErrNothingToDo   = errors.New("the source already matches these settings")
+	ErrFileNotReady  = errors.New("file version is not ready")
+	ytdlpProgressRe  = regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%\s+of\s+.*?\s+at\s+(.+?)\s+ETA\s+(\S+)`)
+	skipDownloadExts = []string{".jpg", ".jpeg", ".png", ".webp", ".json", ".part", ".ytdl", ".temp"}
 )
 
-type DownloadProgressDTO struct {
-	Percent         float64        `json:"percent"`
-	EncodingPercent float64        `json:"encodingPercent"`
-	Speed           string         `json:"speed"`
-	ETA             string         `json:"eta"`
-	Status          DownloadStatus `json:"status"`
-	LastOutput      string         `json:"last_output"`
-}
-
-type DownloadProgress struct {
-	mu              sync.RWMutex
-	Percent         float64
-	EncodingPercent float64
-	Speed           string
-	ETA             string
-	Status          DownloadStatus
-	LastOutput      string
-}
-
-func (p *DownloadProgress) Update(ws *WebSocketService, id string, percent, encodingPercent float64, speed, eta string, status DownloadStatus, lastOutput string) {
-	p.mu.Lock()
-	p.Percent = percent
-	p.EncodingPercent = encodingPercent
-	p.Speed = speed
-	p.ETA = eta
-	p.Status = status
-	p.LastOutput = lastOutput
-	p.mu.Unlock()
-
-	if ws != nil {
-		ws.Broadcast(WsEventProgress, map[string]interface{}{
-			"id":              id,
-			"percent":         percent,
-			"encodingPercent": encodingPercent,
-			"speed":           speed,
-			"eta":             eta,
-			"status":          status,
-			"last_output":     lastOutput,
-		})
-	}
-}
-
-func (p *DownloadProgress) GetSnapshot() DownloadProgressDTO {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return DownloadProgressDTO{
-		Percent:         p.Percent,
-		EncodingPercent: p.EncodingPercent,
-		Speed:           p.Speed,
-		ETA:             p.ETA,
-		Status:          p.Status,
-		LastOutput:      p.LastOutput,
-	}
-}
-
-type EncodingOptions struct {
-	VideoCodec string // libx264, libvpx-vp9, vp9_qsv
-	AudioCodec string // aac, libopus
-	CRF        int
-}
+const maxOutput = 64 << 10
 
 type DownloaderService struct {
-	progress sync.Map // map[string]*DownloadProgress
-	queries  *database.Queries
-	ws       *WebSocketService
-	ytdlp    *YtdlpService
+	jobRegistry
+	store     *VideoStore
+	queries   *database.Queries
+	settings  *SettingsService
+	ytdlp     *YtdlpService
+	caps      *encoding.Capabilities
+	dir       string
+	downloads *pool
+	encodes   *pool
+	onFile    []func(Video, database.VideoFile)
 }
 
-func NewDownloaderService(queries *database.Queries, ws *WebSocketService, ytdlp *YtdlpService) *DownloaderService {
-	return &DownloaderService{
-		queries: queries,
-		ws:      ws,
-		ytdlp:   ytdlp,
+func NewDownloaderService(store *VideoStore, queries *database.Queries, ws *WebSocketService, settings *SettingsService,
+	ytdlp *YtdlpService, caps *encoding.Capabilities, dir string) *DownloaderService {
+	s := settings.MustGet(context.Background())
+	d := &DownloaderService{
+		jobRegistry: jobRegistry{ws: ws},
+		store:       store,
+		queries:     queries,
+		settings:    settings,
+		ytdlp:       ytdlp,
+		caps:        caps,
+		dir:         dir,
+		downloads:   newPool(s.MaxConcurrentDownloads),
+		encodes:     newPool(s.MaxConcurrentEncodes),
 	}
-}
-
-func (s *DownloaderService) GetProgress(id string) (DownloadProgressDTO, bool) {
-	val, ok := s.progress.Load(id)
-	if !ok {
-		return DownloadProgressDTO{}, false
-	}
-	return val.(*DownloadProgress).GetSnapshot(), true
-}
-
-func (s *DownloaderService) GetAllProgress() map[string]DownloadProgressDTO {
-	allProgress := make(map[string]DownloadProgressDTO)
-	s.progress.Range(func(key, value interface{}) bool {
-		id := key.(string)
-		prog := value.(*DownloadProgress)
-		allProgress[id] = prog.GetSnapshot()
-		return true
+	settings.OnChange(func(s Settings) {
+		d.downloads.setLimit(s.MaxConcurrentDownloads)
+		d.encodes.setLimit(s.MaxConcurrentEncodes)
 	})
-	return allProgress
+	return d
 }
 
-func (s *DownloaderService) DeleteVideoFiles(fileName, thumbnailFileName string) {
-	if fileName != "" {
-		path := filepath.Join("downloads", fileName)
-		log.Printf("INFO: Deleting video file: %s\n", path)
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			log.Printf("WARN: Failed to delete video file %s: %v\n", path, err)
-		}
-	}
-	if thumbnailFileName != "" {
-		path := filepath.Join("downloads", thumbnailFileName)
-		log.Printf("INFO: Deleting thumbnail file: %s\n", path)
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			log.Printf("WARN: Failed to delete thumbnail file %s: %v\n", path, err)
-		}
-	}
+// OnFileCompleted registers a callback for every finished file version.
+func (d *DownloaderService) OnFileCompleted(fn func(Video, database.VideoFile)) {
+	d.onFile = append(d.onFile, fn)
 }
 
-func (s *DownloaderService) UpdateYtdlp(ctx context.Context) (string, error) {
-	cmd := s.ytdlp.UpdateCommand(ctx)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
+func (d *DownloaderService) Capabilities() *encoding.Capabilities { return d.caps }
+
+func (d *DownloaderService) Path(name string) string {
+	return filepath.Join(d.dir, filepath.Base(name))
 }
 
-func (s *DownloaderService) GetVideoMetadata(ctx context.Context, url string) (*VideoMetadata, error) {
-	cmd := s.ytdlp.MetadataCommand(ctx, url)
-	log.Printf("DEBUG: Getting metadata with command: %s\n", cmd.String())
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+// RecoverInterrupted marks jobs cut off by a restart and removes their partial files.
+func (d *DownloaderService) RecoverInterrupted(ctx context.Context) {
+	files, err := d.store.MarkInterrupted(ctx)
 	if err != nil {
-		log.Printf("ERROR: yt-dlp metadata failed: %v, stderr: %s\n", err, stderr.String())
-		return nil, fmt.Errorf("failed to get metadata: %w (stderr: %s)", err, stderr.String())
+		log.Printf("WARN: failed to recover interrupted jobs: %v\n", err)
+		return
+	}
+	for _, f := range files {
+		d.removeTemp(f.ID)
+		d.recordError(f.VideoID, f.ID, "restart", "Interrupted by server restart", "")
+	}
+}
+
+// StartDownload creates the original file version and downloads it in the background.
+func (d *DownloaderService) StartDownload(ctx context.Context, v Video, url, formatID string, req encoding.Request) (database.VideoFile, error) {
+	file, err := d.store.CreateFile(ctx, database.CreateVideoFileParams{
+		VideoID: v.ID, Kind: KindOriginal, Label: "Original", Status: FileQueued,
+	})
+	if err != nil {
+		return database.VideoFile{}, err
+	}
+	j := d.start(v.ID, file.ID)
+	go d.runDownload(j, v.ID, file, url, formatID, req)
+	return file, nil
+}
+
+// StartEncode creates a new version of a video from an existing completed version.
+func (d *DownloaderService) StartEncode(ctx context.Context, v Video, source database.VideoFile, req encoding.Request, makePrimary bool) (database.VideoFile, error) {
+	if source.Status != FileCompleted || source.FileName == nil {
+		return database.VideoFile{}, ErrFileNotReady
+	}
+	if err := req.Validate(d.caps); err != nil {
+		return database.VideoFile{}, err
+	}
+	rec := req.Resolve(d.caps, SourceOf(source))
+	if rec.Skip {
+		return database.VideoFile{}, ErrNothingToDo
+	}
+	return d.enqueueEncode(ctx, v.ID, source, rec, makePrimary, false)
+}
+
+func (d *DownloaderService) enqueueEncode(ctx context.Context, videoID string, source database.VideoFile, rec encoding.Recommendation, makePrimary, removeSource bool) (database.VideoFile, error) {
+	profile, err := json.Marshal(rec.Profile)
+	if err != nil {
+		return database.VideoFile{}, err
+	}
+	profileStr := string(profile)
+	file, err := d.store.CreateFile(ctx, database.CreateVideoFileParams{
+		VideoID: videoID, Kind: KindEncode, SourceFileID: &source.ID, Label: rec.Label,
+		Status: FileQueued, EncodingProfile: &profileStr,
+	})
+	if err != nil {
+		return database.VideoFile{}, err
+	}
+	j := d.start(videoID, file.ID)
+	go d.runEncode(j, videoID, file, source, rec, makePrimary, removeSource)
+	return file, nil
+}
+
+func (d *DownloaderService) runDownload(j *job, videoID string, file database.VideoFile, url, formatID string, req encoding.Request) {
+	defer d.done(file.ID)
+	ctx := j.ctx
+
+	if err := d.downloads.acquire(ctx); err != nil {
+		d.fail(j, videoID, file.ID, "yt-dlp", err, "")
+		return
+	}
+	defer d.downloads.release()
+	d.setStatus(j, videoID, file.ID, FileDownloading)
+
+	format := ""
+	if formatID != "" {
+		format = formatID + "+bestaudio/" + formatID
+	}
+	cmd := d.ytdlp.DownloadCommand(ctx, url, YtdlpDownloadOptions{
+		Format:        format,
+		OutputPattern: filepath.Join(d.dir, file.ID+".%(ext)s"),
+	})
+	output, err := runStreaming(cmd, func(line string) {
+		if m := ytdlpProgressRe.FindStringSubmatch(line); m != nil {
+			percent, _ := strconv.ParseFloat(m[1], 64)
+			j.update(Progress{VideoID: videoID, FileID: file.ID, Stage: FileDownloading, Percent: percent, Speed: m[2], ETA: m[3]}, false)
+		}
+	})
+	if err != nil {
+		d.removeTemp(file.ID)
+		d.fail(j, videoID, file.ID, cmd.String(), err, output)
+		return
 	}
 
-	// yt-dlp might output multiple lines if there's any noise,
-	// we try to find the line that starts with {
-	var raw map[string]interface{}
-	lines := strings.Split(string(output), "\n")
-	found := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "{") {
-			if err := json.Unmarshal([]byte(line), &raw); err == nil {
-				found = true
-				break
+	path, err := d.locate(file.ID)
+	if err != nil {
+		d.fail(j, videoID, file.ID, "locate", err, output)
+		return
+	}
+	d.applyInfo(ctx, videoID, file.ID)
+
+	probe, err := ProbeFile(ctx, path)
+	if err != nil {
+		d.fail(j, videoID, file.ID, "ffprobe", err, "")
+		return
+	}
+	label := "Original"
+	if probe.Height > 0 {
+		label += fmt.Sprintf(" · %dp", probe.Height)
+	}
+	file, err = d.complete(ctx, j, videoID, probe.mediaParams(file.ID, filepath.Base(path), label), true)
+	if err != nil {
+		return
+	}
+
+	rec := req.Resolve(d.caps, probe.Source)
+	if rec.Skip {
+		return
+	}
+	keep := d.settings.MustGet(ctx).KeepOriginal
+	if _, err := d.enqueueEncode(context.Background(), videoID, file, rec, true, !keep); err != nil {
+		d.recordError(videoID, file.ID, "encode", err.Error(), "")
+	}
+}
+
+func (d *DownloaderService) runEncode(j *job, videoID string, file, source database.VideoFile, rec encoding.Recommendation, makePrimary, removeSource bool) {
+	defer d.done(file.ID)
+	ctx := j.ctx
+
+	if err := d.encodes.acquire(ctx); err != nil {
+		d.fail(j, videoID, file.ID, "ffmpeg", err, "")
+		return
+	}
+	defer d.encodes.release()
+	d.setStatus(j, videoID, file.ID, FileEncoding)
+
+	src := SourceOf(source)
+	input := d.Path(*source.FileName)
+	outName := file.ID + rec.Profile.Extension()
+	if src.Duration == 0 {
+		if p, err := ProbeFile(ctx, input); err == nil {
+			src.Duration = p.Duration
+		}
+	}
+
+	args, err := rec.Profile.Args(d.caps, src, input, d.Path(outName))
+	if err != nil {
+		d.fail(j, videoID, file.ID, "ffmpeg", err, "")
+		return
+	}
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	output, err := runStreaming(cmd, func(line string) {
+		us, ok := strings.CutPrefix(line, "out_time_us=")
+		if !ok || src.Duration <= 0 {
+			return
+		}
+		t, _ := strconv.ParseFloat(us, 64)
+		percent := min(t/1e6/src.Duration*100, 100)
+		j.update(Progress{VideoID: videoID, FileID: file.ID, Stage: FileEncoding, Percent: percent}, false)
+	})
+	if err != nil {
+		_ = os.Remove(d.Path(outName))
+		d.fail(j, videoID, file.ID, cmd.String(), err, output)
+		return
+	}
+
+	probe, err := ProbeFile(ctx, d.Path(outName))
+	if err != nil {
+		d.fail(j, videoID, file.ID, "ffprobe", err, "")
+		return
+	}
+	if _, err := d.complete(ctx, j, videoID, probe.mediaParams(file.ID, outName, rec.Label), makePrimary); err != nil {
+		return
+	}
+	if removeSource {
+		if _, err := d.DeleteFile(context.Background(), videoID, source.ID); err != nil {
+			log.Printf("WARN [%s]: failed to remove source version: %v\n", file.ID, err)
+		}
+	}
+}
+
+// complete stores final media info and optionally makes the version primary.
+func (d *DownloaderService) complete(ctx context.Context, j *job, videoID string, params database.UpdateFileMediaParams, makePrimary bool) (database.VideoFile, error) {
+	file, err := d.store.UpdateFileMedia(ctx, videoID, params)
+	if err != nil {
+		d.fail(j, videoID, params.ID, "database", err, "")
+		return file, err
+	}
+	v, err := d.store.Get(ctx, videoID)
+	if err == nil && (makePrimary || v.PrimaryFileID == nil) {
+		v, err = d.store.SetPrimary(ctx, videoID, &file.ID)
+	}
+	j.update(Progress{VideoID: videoID, FileID: file.ID, Stage: FileCompleted, Percent: 100}, true)
+	if err == nil {
+		for _, fn := range d.onFile {
+			fn(v, file)
+		}
+	}
+	return file, nil
+}
+
+// DeleteFile cancels any running job for a version and removes it from disk.
+func (d *DownloaderService) DeleteFile(ctx context.Context, videoID, fileID string) (Video, error) {
+	v, err := d.store.Get(ctx, videoID)
+	if err != nil {
+		return Video{}, err
+	}
+	file, ok := v.File(fileID)
+	if !ok {
+		return Video{}, ErrNotFound
+	}
+	d.Cancel(fileID)
+	if v.PrimaryFileID != nil && *v.PrimaryFileID == fileID {
+		var next *string
+		for _, f := range v.Files {
+			if f.ID != fileID && f.Status == FileCompleted {
+				next = &f.ID
 			}
 		}
-	}
-
-	if !found {
-		return nil, fmt.Errorf("failed to find valid JSON in yt-dlp output")
-	}
-
-	metadata := &VideoMetadata{
-		Title:       getString(raw, "title"),
-		Description: getString(raw, "description"),
-		Duration:    getFloat(raw, "duration"),
-		Thumbnail:   getString(raw, "thumbnail"),
-	}
-
-	if formats, ok := raw["formats"].([]interface{}); ok {
-		for _, f := range formats {
-			fmtObj := f.(map[string]interface{})
-			metadata.Options = append(metadata.Options, VideoOption{
-				FormatID:   getString(fmtObj, "format_id"),
-				Extension:  getString(fmtObj, "ext"),
-				Resolution: getString(fmtObj, "resolution"),
-				Note:       getString(fmtObj, "format_note"),
-				FileSize:   getFloat(fmtObj, "filesize"),
-				VCodec:     getString(fmtObj, "vcodec"),
-				ACodec:     getString(fmtObj, "acodec"),
-			})
+		if _, err := d.store.SetPrimary(ctx, videoID, next); err != nil {
+			return Video{}, err
 		}
 	}
-
-	return metadata, nil
+	v, err = d.store.DeleteFile(ctx, videoID, fileID)
+	if err != nil {
+		return Video{}, err
+	}
+	d.removeFile(file)
+	return v, nil
 }
 
-func getOutputExtension(codec string) string {
-	if codec == "libvpx-vp9" || codec == "vp9_qsv" {
-		return ".webm"
+// DeleteVideo cancels all jobs and removes every file belonging to a video.
+func (d *DownloaderService) DeleteVideo(ctx context.Context, id string) (Video, error) {
+	v, err := d.store.Get(ctx, id)
+	if err != nil {
+		return Video{}, err
 	}
-	return ".mp4"
+	for _, f := range v.Files {
+		d.Cancel(f.ID)
+	}
+	if _, err := d.store.Delete(ctx, id); err != nil {
+		return Video{}, err
+	}
+	for _, f := range v.Files {
+		d.removeFile(f)
+	}
+	if v.ThumbnailFileName != nil {
+		d.remove(*v.ThumbnailFileName)
+	}
+	return v, nil
 }
 
-func buildFFmpegCommand(input, output string, opts *EncodingOptions) *exec.Cmd {
-	args := []string{"-i", input}
-
-	switch opts.VideoCodec {
-	case "libvpx-vp9":
-		args = append(args, "-c:v", "libvpx-vp9", "-crf", strconv.Itoa(opts.CRF), "-b:v", "0", "-cpu-used", "4", "-deadline", "good")
-	case "vp9_qsv":
-		args = append(args, "-c:v", "vp9_qsv", "-global_quality", strconv.Itoa(opts.CRF))
-	default: // libx264 as default
-		args = append(args, "-c:v", "libx264", "-crf", strconv.Itoa(opts.CRF))
+func (d *DownloaderService) setStatus(j *job, videoID, fileID, status string) {
+	if err := d.store.UpdateFileStatus(j.ctx, videoID, fileID, status); err != nil {
+		log.Printf("WARN [%s]: failed to set status %s: %v\n", fileID, status, err)
 	}
+	j.update(Progress{VideoID: videoID, FileID: fileID, Stage: status}, true)
+}
 
-	// Audio codec
-	if opts.AudioCodec == "libopus" {
-		args = append(args, "-c:a", "libopus")
+func (d *DownloaderService) fail(j *job, videoID, fileID, command string, err error, output string) {
+	status := FileError
+	if j.ctx.Err() != nil {
+		status = FileCanceled
 	} else {
-		args = append(args, "-c:a", "aac")
+		log.Printf("ERROR [%s]: %s failed: %v\n", fileID, command, err)
+		d.recordError(videoID, fileID, command, err.Error(), output)
 	}
-
-	args = append(args, "-progress", "-", "-y", output)
-	return exec.Command("ffmpeg", args...)
+	if err := d.store.UpdateFileStatus(context.Background(), videoID, fileID, status); err != nil && !errors.Is(err, ErrNotFound) {
+		log.Printf("WARN [%s]: failed to set status %s: %v\n", fileID, status, err)
+	}
+	j.update(Progress{VideoID: videoID, FileID: fileID, Stage: status}, true)
 }
 
-func (s *DownloaderService) StartDownload(ctx context.Context, id pgtype.UUID, url string, formatID string, finalBaseName string, reEncode bool, encodingOptions *EncodingOptions) {
-	idStr := id.String()
-	finalBaseName = utils.SanitizeFilename(finalBaseName)
+func (d *DownloaderService) recordError(videoID, fileID, command, message, output string) {
+	if len(output) > maxOutput {
+		output = output[len(output)-maxOutput:]
+	}
+	err := d.queries.CreateError(context.Background(), database.CreateErrorParams{
+		ID: NewID(), VideoID: &videoID, FileID: &fileID, ErrorMessage: message, Command: command, Output: output,
+	})
+	if err != nil {
+		log.Printf("WARN: failed to record error: %v\n", err)
+	}
+}
 
-	log.Printf("INFO [%s]: Initializing download task for URL: %s (final name: %s)\n", idStr, url, finalBaseName)
-
-	prog := &DownloadProgress{Status: StatusPending}
-	s.progress.Store(idStr, prog)
-
-	go func() {
-		// 1. Download as guid.ext
-		f := formatID
-		if f == "" {
-			f = "bestvideo+bestaudio/best"
-		} else {
-			f = f + "+bestaudio/best"
+func (d *DownloaderService) locate(fileID string) (string, error) {
+	matches, _ := filepath.Glob(filepath.Join(d.dir, fileID+".*"))
+	for _, m := range matches {
+		ext := strings.ToLower(filepath.Ext(m))
+		if !strings.HasSuffix(m, ".info.json") && !slices.Contains(skipDownloadExts, ext) {
+			return m, nil
 		}
+	}
+	return "", fmt.Errorf("downloaded video file not found")
+}
 
-		tempPathPattern := filepath.Join("downloads", idStr+".%(ext)s")
-		log.Printf("INFO [%s]: Starting yt-dlp download with format: %s\n", idStr, f)
-		prog.Update(s.ws, idStr, 0, 0, "", "", StatusDownloading, "Starting download...")
+// applyInfo stores title, uploader and thumbnail written next to the download.
+func (d *DownloaderService) applyInfo(ctx context.Context, videoID, fileID string) {
+	params := database.UpdateVideoSourceParams{ID: videoID}
 
-		cmd := s.ytdlp.DownloadCommand(context.Background(), url, YtdlpDownloadOptions{
-			FormatID:          f,
-			OutputPattern:     tempPathPattern,
-			WriteThumbnail:    true,
-			ConvertThumbnails: "jpg",
-		})
-		log.Printf("DEBUG [%s]: Executing command: %s\n", idStr, cmd.String())
-		var fullOutput bytes.Buffer
-
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("ERROR [%s]: Failed to create stdout pipe: %v\n", idStr, err)
-			prog.Update(s.ws, idStr, 0, 0, "", "", StatusError, "Failed to create stdout pipe: "+err.Error())
-			return
+	infoPath := filepath.Join(d.dir, fileID+".info.json")
+	if data, err := os.ReadFile(infoPath); err == nil {
+		var info ytdlpInfo
+		if json.Unmarshal(data, &info) == nil {
+			params.SourceTitle = nonEmpty(info.Title)
+			params.Uploader = nonEmpty(info.Uploader)
+			params.Duration = positive(info.Duration)
 		}
-		cmd.Stderr = &fullOutput
+		_ = os.Remove(infoPath)
+	}
 
-		if err := cmd.Start(); err != nil {
-			log.Printf("ERROR [%s]: Failed to start yt-dlp: %v\n", idStr, err)
-			prog.Update(s.ws, idStr, 0, 0, "", "", StatusError, "Failed to start yt-dlp: "+err.Error())
-			s.queries.CreateError(context.Background(), database.CreateErrorParams{
-				VideoID:      id,
-				ErrorMessage: err.Error(),
-				Command:      "yt-dlp (start)",
-				Output:       "",
-			})
-			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-				ID:             id,
-				DownloadStatus: string(StatusError),
-			})
-			return
+	thumb := filepath.Join(d.dir, fileID+".jpg")
+	if _, err := os.Stat(thumb); err == nil {
+		name := videoID + ".jpg"
+		if err := os.Rename(thumb, d.Path(name)); err == nil {
+			params.ThumbnailFileName = &name
 		}
+	}
 
-		// Use TeeReader to capture stdout while scanning
-		multiReader := io.TeeReader(stdout, &fullOutput)
-		scanner := bufio.NewScanner(multiReader)
-		progressRegex := regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%\s+of\s+.*\s+at\s+(.*)\s+ETA\s+(.*)`)
+	if _, err := d.store.UpdateSource(ctx, params); err != nil {
+		log.Printf("WARN [%s]: failed to store source info: %v\n", fileID, err)
+	}
+}
 
-		for scanner.Scan() {
-			line := scanner.Text()
-			matches := progressRegex.FindStringSubmatch(line)
-			if len(matches) == 4 {
-				percent, _ := strconv.ParseFloat(matches[1], 64)
-				prog.Update(s.ws, idStr, percent, 0, matches[2], matches[3], StatusDownloading, line)
-			} else {
-				prog.mu.Lock()
-				prog.LastOutput = line
-				prog.mu.Unlock()
-			}
-		}
+func (d *DownloaderService) removeTemp(fileID string) {
+	matches, _ := filepath.Glob(filepath.Join(d.dir, fileID+".*"))
+	for _, m := range matches {
+		_ = os.Remove(m)
+	}
+}
 
-		if err := cmd.Wait(); err != nil {
-			outputStr := fullOutput.String()
-			log.Printf("ERROR [%s]: yt-dlp download failed: %v\nOutput: %s\n", idStr, err, outputStr)
-			prog.Update(s.ws, idStr, prog.Percent, 0, prog.Speed, prog.ETA, StatusError, fmt.Sprintf("Download failed: %v", err))
+func (d *DownloaderService) removeFile(f database.VideoFile) {
+	if f.FileName != nil {
+		d.remove(*f.FileName)
+	}
+	d.removeTemp(f.ID)
+}
 
-			s.queries.CreateError(context.Background(), database.CreateErrorParams{
-				VideoID:      id,
-				ErrorMessage: err.Error(),
-				Command:      "yt-dlp",
-				Output:       outputStr,
-			})
-			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-				ID:             id,
-				DownloadStatus: string(StatusError),
-			})
-			return
-		}
+func (d *DownloaderService) remove(name string) {
+	if err := os.Remove(d.Path(name)); err != nil && !os.IsNotExist(err) {
+		log.Printf("WARN: failed to delete %s: %v\n", name, err)
+	}
+}
 
-		log.Printf("INFO [%s]: Download completed. Searching for downloaded file...\n", idStr)
+// runStreaming runs cmd, feeding stdout lines to onLine, and returns the
+// tail of combined output for error reporting. Cancelling the command's
+// context kills its whole process tree.
+func runStreaming(cmd *exec.Cmd, onLine func(string)) (string, error) {
+	tail := &tailBuffer{}
+	cmd.Stdout = &lineWriter{tail: tail, onLine: onLine}
+	cmd.Stderr = &lineWriter{tail: tail}
+	cmd.WaitDelay = 5 * time.Second
+	killTree(cmd)
+	err := cmd.Run()
+	return tail.String(), err
+}
 
-		// 2. Find the downloaded file
-		files, _ := filepath.Glob(filepath.Join("downloads", idStr+".*"))
-		if len(files) == 0 {
-			msg := "Downloaded file not found in downloads directory"
-			log.Printf("ERROR [%s]: %s\n", idStr, msg)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, msg)
-			s.queries.CreateError(context.Background(), database.CreateErrorParams{
-				VideoID:      id,
-				ErrorMessage: msg,
-				Command:      "file-glob",
-				Output:       "",
-			})
-			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-				ID:             id,
-				DownloadStatus: string(StatusError),
-			})
-			return
-		}
-		var tempFile string
-		for _, f := range files {
-			ext := strings.ToLower(filepath.Ext(f))
-			// Skip thumbnails and temporary files
-			if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" || ext == ".part" || ext == ".ytdl" {
-				continue
-			}
-			tempFile = f
+type tailBuffer struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (t *tailBuffer) add(line []byte) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(append(t.buf, line...), '\n')
+	if len(t.buf) > maxOutput*2 {
+		t.buf = append([]byte(nil), t.buf[len(t.buf)-maxOutput:]...)
+	}
+}
+
+func (t *tailBuffer) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return string(t.buf)
+}
+
+// lineWriter splits process output into lines; ffmpeg and yt-dlp may use CR.
+type lineWriter struct {
+	tail    *tailBuffer
+	onLine  func(string)
+	pending []byte
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.pending = append(w.pending, p...)
+	for {
+		i := bytes.IndexAny(w.pending, "\r\n")
+		if i < 0 {
 			break
 		}
-
-		if tempFile == "" {
-			msg := "Downloaded video file not found in downloads directory (only found thumbnails)"
-			log.Printf("ERROR [%s]: %s\n", idStr, msg)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, msg)
-			s.queries.CreateError(context.Background(), database.CreateErrorParams{
-				VideoID:      id,
-				ErrorMessage: msg,
-				Command:      "file-glob-check",
-				Output:       "",
-			})
-			s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-				ID:             id,
-				DownloadStatus: string(StatusError),
-			})
-			return
-		}
-		log.Printf("INFO [%s]: Found temporary video file: %s\n", idStr, tempFile)
-
-		// 3. Process video (Encode or Rename)
-		var finalFileName string
-		if reEncode {
-			// Set default encoding options if not provided
-			opts := encodingOptions
-			if opts == nil {
-				opts = &EncodingOptions{
-					VideoCodec: "libx264",
-					AudioCodec: "aac",
-					CRF:        23,
-				}
-			}
-
-			outputExt := getOutputExtension(opts.VideoCodec)
-			finalFileName = finalBaseName + outputExt
-			finalPath := filepath.Join("downloads", finalFileName)
-			tempEncodePath := filepath.Join("downloads", idStr+"_encoded"+outputExt)
-
-			log.Printf("INFO [%s]: Starting ffmpeg encoding with codec %s: %s\n", idStr, opts.VideoCodec, tempEncodePath)
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, "Getting video duration...")
-
-			// Get duration for progress calculation
-			durationCmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", tempFile)
-			durationOut, err := durationCmd.Output()
-			duration := 0.0
-			if err == nil {
-				duration, _ = strconv.ParseFloat(strings.TrimSpace(string(durationOut)), 64)
-			}
-			log.Printf("INFO [%s]: Video duration: %.2fs\n", idStr, duration)
-
-			prog.Update(s.ws, idStr, 100, 0, "", "", StatusEncoding, fmt.Sprintf("Encoding with %s...", opts.VideoCodec))
-
-			encodeCmd := buildFFmpegCommand(tempFile, tempEncodePath, opts)
-			log.Printf("DEBUG [%s]: ffmpeg command: %s\n", idStr, encodeCmd.String())
-
-			var encodeOutput bytes.Buffer
-			encodeStdout, err := encodeCmd.StdoutPipe()
-			if err != nil {
-				log.Printf("ERROR [%s]: Failed to create ffmpeg stdout pipe: %v\n", idStr, err)
-				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to create ffmpeg stdout pipe: "+err.Error())
-				return
-			}
-			encodeCmd.Stderr = &encodeOutput
-
-			if err := encodeCmd.Start(); err != nil {
-				log.Printf("ERROR [%s]: Failed to start ffmpeg: %v\n", idStr, err)
-				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to start ffmpeg: "+err.Error())
-				return
-			}
-
-			encodeScanner := bufio.NewScanner(encodeStdout)
-			for encodeScanner.Scan() {
-				line := encodeScanner.Text()
-				if after, ok := strings.CutPrefix(line, "out_time_ms="); ok {
-					timeUsStr := after
-					timeUs, _ := strconv.ParseFloat(timeUsStr, 64)
-					if duration > 0 {
-						encodingPercent := (timeUs / 1000000.0 / duration) * 100.0
-						if encodingPercent > 100 {
-							encodingPercent = 100
-						}
-						prog.Update(s.ws, idStr, 100, encodingPercent, "", "", StatusEncoding, "Encoding in progress...")
-					}
-				}
-			}
-
-			if err := encodeCmd.Wait(); err != nil {
-				outputStr := encodeOutput.String()
-				log.Printf("ERROR [%s]: ffmpeg encoding failed: %v\nOutput: %s\n", idStr, err, outputStr)
-				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, fmt.Sprintf("Encoding failed: %v\nOutput: %s", err, outputStr))
-				os.Remove(tempEncodePath) // Clean up partial encoded file
-
-				s.queries.CreateError(context.Background(), database.CreateErrorParams{
-					VideoID:      id,
-					ErrorMessage: err.Error(),
-					Command:      "ffmpeg",
-					Output:       outputStr,
-				})
-				s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-					ID:             id,
-					DownloadStatus: string(StatusError),
-				})
-				return
-			}
-
-			// Move encoded file to final path
-			if err := os.Rename(tempEncodePath, finalPath); err != nil {
-				log.Printf("ERROR [%s]: Failed to rename encoded file: %v\n", idStr, err)
-				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename encoded file: "+err.Error())
-				return
-			}
-			log.Printf("INFO [%s]: Encoding successful. Cleaning up temporary file: %s\n", idStr, tempFile)
-		} else {
-			log.Printf("INFO [%s]: Skipping re-encoding as requested.\n", idStr)
-			prog.Update(s.ws, idStr, 100, 100, "", "", StatusEncoding, "Skipping encoding...")
-
-			finalFileName = finalBaseName + filepath.Ext(tempFile)
-			finalPath := filepath.Join("downloads", finalFileName)
-
-			if err := os.Rename(tempFile, finalPath); err != nil {
-				log.Printf("ERROR [%s]: Failed to rename downloaded file: %v\n", idStr, err)
-				prog.Update(s.ws, idStr, 100, 0, "", "", StatusError, "Failed to rename downloaded file: "+err.Error())
-				return
-			}
-			log.Printf("INFO [%s]: Rename successful: %s -> %s\n", idStr, tempFile, finalPath)
-		}
-
-		// 4. Handle thumbnail
-		finalThumbnailName := finalBaseName + ".jpg"
-		finalThumbnailPath := filepath.Join("downloads", finalThumbnailName)
-
-		// yt-dlp saves thumbnail as idStr.jpg due to --convert-thumbnails jpg and our -o pattern
-		tempThumbnailPath := filepath.Join("downloads", idStr+".jpg")
-		if _, err := os.Stat(tempThumbnailPath); err == nil {
-			log.Printf("INFO [%s]: Found thumbnail: %s, renaming to: %s\n", idStr, tempThumbnailPath, finalThumbnailPath)
-			if err := os.Rename(tempThumbnailPath, finalThumbnailPath); err != nil {
-				log.Printf("WARN [%s]: Failed to rename thumbnail: %v\n", idStr, err)
-				finalThumbnailName = "" // Reset if rename failed
-			}
-		} else {
-			log.Printf("WARN [%s]: Thumbnail not found at %s\n", idStr, tempThumbnailPath)
-			finalThumbnailName = ""
-		}
-
-		// 5. Cleanup all remaining temporary files for this ID
-		log.Printf("INFO [%s]: Cleaning up temporary files matching %s.*\n", idStr, idStr)
-		remainingFiles, _ := filepath.Glob(filepath.Join("downloads", idStr+".*"))
-		for _, f := range remainingFiles {
-			if err := os.Remove(f); err != nil {
-				if !os.IsNotExist(err) {
-					log.Printf("WARN [%s]: Failed to remove temporary file %s: %v\n", idStr, f, err)
-				}
-			} else {
-				log.Printf("INFO [%s]: Removed temporary file: %s\n", idStr, f)
+		if line := w.pending[:i]; len(line) > 0 {
+			w.tail.add(line)
+			if w.onLine != nil {
+				w.onLine(string(line))
 			}
 		}
-
-		// 6. Get file size
-		var fileSize int64
-		finalPath := filepath.Join("downloads", finalFileName)
-		if fileInfo, err := os.Stat(finalPath); err == nil {
-			fileSize = fileInfo.Size()
-			log.Printf("INFO [%s]: Final file size: %d bytes\n", idStr, fileSize)
-		} else {
-			log.Printf("WARN [%s]: Failed to get file size: %v\n", idStr, err)
-		}
-
-		// 7. Update database
-		log.Printf("INFO [%s]: Updating database with final file names and status.\n", idStr)
-		prog.Update(s.ws, idStr, 100, 100, "", "", StatusFinished, "Processing complete")
-
-		_, err = s.queries.UpdateVideoFiles(context.Background(), database.UpdateVideoFilesParams{
-			ID:                id,
-			FileName:          pgtype.Text{String: finalFileName, Valid: true},
-			ThumbnailFileName: pgtype.Text{String: finalThumbnailName, Valid: finalThumbnailName != ""},
-			FileSize:          pgtype.Int8{Int64: fileSize, Valid: fileSize > 0},
-		})
-		if err != nil {
-			log.Printf("ERROR [%s]: Failed to update video file names in database: %v\n", idStr, err)
-		}
-
-		_, err = s.queries.UpdateVideoStatus(context.Background(), database.UpdateVideoStatusParams{
-			ID:             id,
-			DownloadStatus: string(StatusFinished),
-		})
-		if err != nil {
-			log.Printf("ERROR [%s]: Failed to update video status in database: %v\n", idStr, err)
-		}
-
-		log.Printf("SUCCESS [%s]: Video download and processing finished successfully.\n", idStr)
-	}()
-}
-
-func getString(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
+		w.pending = w.pending[i+1:]
 	}
-	return ""
-}
-
-func getFloat(m map[string]interface{}, key string) float64 {
-	if v, ok := m[key].(float64); ok {
-		return v
-	}
-	return 0
+	return len(p), nil
 }

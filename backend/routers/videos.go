@@ -7,13 +7,26 @@ import (
 
 func VideoRouter(h *handlers.VideoHandler) chi.Router {
 	r := chi.NewRouter()
-	r.Post("/", h.CreateVideo)
 	r.Get("/", h.ListVideos)
+	r.Post("/", h.CreateVideo)
+	r.Post("/quick", h.QuickDownload)
 	r.Post("/metadata", h.GetMetadata)
-	r.Get("/progress", h.ListAllProgress)
-	r.Get("/{id}", h.GetVideo)
-	r.Put("/{id}", h.UpdateVideo)
-	r.Get("/{id}/progress", h.GetProgress)
-	r.Delete("/{id}", h.DeleteVideo)
+	r.Get("/progress", h.ListProgress)
+	r.Route("/{id}", func(r chi.Router) {
+		r.Get("/", h.GetVideo)
+		r.Put("/", h.UpdateVideo)
+		r.Delete("/", h.DeleteVideo)
+		r.Get("/thumbnail", h.GetThumbnail)
+		r.Post("/files", h.CreateVersion)
+		r.Patch("/files/{fileId}", h.UpdateVersion)
+		r.Delete("/files/{fileId}", h.DeleteVersion)
+		r.Post("/files/{fileId}/cancel", h.CancelVersion)
+	})
+	return r
+}
+
+func FileRouter(h *handlers.VideoHandler) chi.Router {
+	r := chi.NewRouter()
+	r.Get("/{fileId}", h.GetFile)
 	return r
 }

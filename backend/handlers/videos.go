@@ -1,388 +1,221 @@
 package handlers
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 
-	"github.com/Azmekk/Vidra/backend/gen/database"
 	"github.com/Azmekk/Vidra/backend/services"
+	"github.com/Azmekk/Vidra/backend/services/encoding"
 	"github.com/Azmekk/Vidra/backend/utils"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type VideoHandler struct {
-	Queries    *database.Queries
+	Store      *services.VideoStore
 	Downloader *services.DownloaderService
-	Ws         *services.WebSocketService
+	Ytdlp      *services.YtdlpService
+	Settings   *services.SettingsService
 }
 
-func NewVideoHandler(queries *database.Queries, downloader *services.DownloaderService, ws *services.WebSocketService) *VideoHandler {
-	return &VideoHandler{
-		Queries:    queries,
-		Downloader: downloader,
-		Ws:         ws,
-	}
+func NewVideoHandler(store *services.VideoStore, downloader *services.DownloaderService, ytdlp *services.YtdlpService, settings *services.SettingsService) *VideoHandler {
+	return &VideoHandler{Store: store, Downloader: downloader, Ytdlp: ytdlp, Settings: settings}
 }
 
 type MetadataRequest struct {
 	URL string `json:"url"`
 }
 
-func (r *MetadataRequest) Validate() error {
-	if r.URL == "" {
-		return fmt.Errorf("url is required")
-	}
-	return nil
-}
-
 // GetMetadata godoc
-// @Summary Get video metadata and options
-// @Description Fetch available formats and metadata for a given URL using yt-dlp
+// @Summary Get video metadata and format options
 // @ID getMetadata
 // @Tags videos
 // @Accept json
 // @Produce json
 // @Param request body MetadataRequest true "Video URL"
 // @Success 200 {object} services.VideoMetadata
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 502 {object} utils.ErrorResponse
 // @Router /api/videos/metadata [post]
 func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 	var req MetadataRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	if err := req.Validate(); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+	url, ok := sanitizeURL(w, req.URL)
+	if !ok {
 		return
 	}
-
-	sanitizedURL, err := utils.SanitizeURL(req.URL)
+	metadata, err := h.Ytdlp.GetMetadata(r.Context(), url)
 	if err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid URL")
+		utils.RespondWithError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-
-	metadata, err := h.Downloader.GetVideoMetadata(r.Context(), sanitizedURL)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	utils.RespondWithJSON(w, http.StatusOK, metadata)
 }
 
-type EncodingOptions struct {
-	VideoCodec string `json:"videoCodec"` // libx264, libvpx-vp9, vp9_qsv
-	AudioCodec string `json:"audioCodec"` // aac, libopus
-	CRF        int    `json:"crf"`
-}
-
 type CreateVideoRequest struct {
-	Name            string           `json:"name"`
-	DownloadURL     string           `json:"downloadUrl"`
-	FormatID        string           `json:"formatId"`
-	ReEncode        bool             `json:"reEncode"`
-	EncodingOptions *EncodingOptions `json:"encodingOptions,omitempty"`
-}
-
-func (r *CreateVideoRequest) Validate() error {
-	if r.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-	if r.DownloadURL == "" {
-		return fmt.Errorf("downloadUrl is required")
-	}
-	return nil
-}
-
-type VideoResponse struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	FileName          string `json:"fileName,omitempty"`
-	ThumbnailFileName string `json:"thumbnailFileName,omitempty"`
-	DownloadURL       string `json:"downloadUrl"`
-	DownloadStatus    string `json:"downloadStatus"`
-	FileSize          *int64 `json:"fileSize,omitempty"`
-	CreatedAt         string `json:"createdAt"`
-	UpdatedAt         string `json:"updatedAt"`
-}
-
-func mapVideoToResponse(v database.Video) VideoResponse {
-	resp := VideoResponse{
-		ID:                v.ID.String(),
-		Name:              v.Name,
-		FileName:          v.FileName.String,
-		ThumbnailFileName: v.ThumbnailFileName.String,
-		DownloadURL:       v.OriginalUrl,
-		DownloadStatus:    v.DownloadStatus,
-		CreatedAt:         v.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:         v.UpdatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
-	}
-	if v.FileSize.Valid {
-		resp.FileSize = &v.FileSize.Int64
-	}
-	return resp
-}
-
-// backfillFileSize checks if a video is missing file_size and attempts to read it from disk.
-// If found, it updates the database in the background and sets the size on the video struct.
-func (h *VideoHandler) backfillFileSize(video *database.Video) {
-	if video.FileSize.Valid && video.FileSize.Int64 > 0 {
-		return // Already has size
-	}
-	if video.DownloadStatus != "completed" || !video.FileName.Valid {
-		return // Not ready or no file
-	}
-
-	path := filepath.Join("downloads", video.FileName.String)
-	info, err := os.Stat(path)
-	if err != nil {
-		return // File not found
-	}
-
-	// Update in background (don't block response)
-	go func() {
-		h.Queries.UpdateVideoFiles(context.Background(), database.UpdateVideoFilesParams{
-			ID:                video.ID,
-			FileName:          video.FileName,
-			ThumbnailFileName: video.ThumbnailFileName,
-			FileSize:          pgtype.Int8{Int64: info.Size(), Valid: true},
-		})
-	}()
-
-	// Set on video for immediate response
-	video.FileSize = pgtype.Int8{Int64: info.Size(), Valid: true}
+	Name        string           `json:"name"`
+	URL         string           `json:"url"`
+	SourceTitle string           `json:"sourceTitle,omitempty"`
+	FormatID    string           `json:"formatId,omitempty"`
+	Encoding    encoding.Request `json:"encoding"`
 }
 
 // CreateVideo godoc
-// @Summary Create a new video download task
-// @Description Create a new video record and start background download
+// @Summary Download a video with chosen format and encoding
 // @ID createVideo
 // @Tags videos
 // @Accept json
 // @Produce json
-// @Param video body CreateVideoRequest true "Video details"
-// @Success 201 {object} VideoResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Param video body CreateVideoRequest true "Download options"
+// @Success 201 {object} services.VideoDTO
+// @Failure 400 {object} utils.ErrorResponse
 // @Router /api/videos [post]
 func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
-	// Read body for logging
-	bodyBytes, _ := io.ReadAll(r.Body)
-	log.Printf("DEBUG: CreateVideo raw body: %s\n", string(bodyBytes))
-	// Restore body for json decoder
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
 	var req CreateVideoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("ERROR: Failed to decode CreateVideo request: %v\n", err)
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	log.Printf("DEBUG: CreateVideo parsed request: %+v\n", req)
-
-	if err := req.Validate(); err != nil {
-		log.Printf("ERROR: CreateVideo validation failed: %v\n", err)
+	if err := req.Encoding.Validate(h.Downloader.Capabilities()); err != nil {
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	sanitizedURL, err := utils.SanitizeURL(req.DownloadURL)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid URL")
-		return
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = utils.RandomName()
 	}
-
-	log.Printf("INFO: Received request to download video: Name='%s', URL='%s', FormatID='%s'\n", req.Name, sanitizedURL, req.FormatID)
-
-	video, err := h.Queries.CreateVideo(r.Context(), database.CreateVideoParams{
-		Name:           req.Name,
-		OriginalUrl:    sanitizedURL,
-		DownloadStatus: string(services.StatusDownloading),
-	})
-	if err != nil {
-		log.Printf("ERROR: Failed to create video record in database: %v\n", err)
-		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+	var sourceTitle *string
+	if req.SourceTitle != "" {
+		sourceTitle = &req.SourceTitle
 	}
-
-	idStr := video.ID.String()
-	log.Printf("INFO: Successfully created video record in database: ID=%s\n", idStr)
-
-	// Start background download
-	log.Printf("INFO: Starting background download for video ID=%s\n", idStr)
-	var encodingOpts *services.EncodingOptions
-	if req.EncodingOptions != nil {
-		encodingOpts = &services.EncodingOptions{
-			VideoCodec: req.EncodingOptions.VideoCodec,
-			AudioCodec: req.EncodingOptions.AudioCodec,
-			CRF:        req.EncodingOptions.CRF,
-		}
-	}
-	h.Downloader.StartDownload(context.Background(), video.ID, sanitizedURL, req.FormatID, req.Name, req.ReEncode, encodingOpts)
-
-	h.Ws.Broadcast(services.WsEventVideoCreated, mapVideoToResponse(video))
-
-	utils.RespondWithJSON(w, http.StatusCreated, mapVideoToResponse(video))
+	h.startDownload(w, r, name, sourceTitle, req.URL, req.FormatID, req.Encoding)
 }
 
-// GetProgress godoc
-// @Summary Get download progress
-// @Description Get the current download progress of a video by ID
-// @ID getProgress
+type QuickDownloadRequest struct {
+	URL string `json:"url"`
+}
+
+// QuickDownload godoc
+// @Summary Start a download immediately with default settings and a random name
+// @ID quickDownload
 // @Tags videos
 // @Accept json
 // @Produce json
-// @Param id path string true "Video ID"
-// @Success 200 {object} services.DownloadProgressDTO
-// @Failure 404 {object} map[string]string
-// @Router /api/videos/{id}/progress [get]
-func (h *VideoHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	if idStr == "" {
-		utils.RespondWithError(w, http.StatusBadRequest, "Missing video ID")
+// @Param request body QuickDownloadRequest true "Video URL"
+// @Success 201 {object} services.VideoDTO
+// @Failure 400 {object} utils.ErrorResponse
+// @Router /api/videos/quick [post]
+func (h *VideoHandler) QuickDownload(w http.ResponseWriter, r *http.Request) {
+	var req QuickDownloadRequest
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-	progress, ok := h.Downloader.GetProgress(idStr)
-	if !ok {
-		utils.RespondWithError(w, http.StatusNotFound, "Progress not found for this ID")
-		return
-	}
+	settings := h.Settings.MustGet(r.Context())
+	h.startDownload(w, r, utils.RandomName(), nil, req.URL, "", settings.DefaultEncoding)
+}
 
+func (h *VideoHandler) startDownload(w http.ResponseWriter, r *http.Request, name string, sourceTitle *string, rawURL, formatID string, req encoding.Request) {
+	url, ok := sanitizeURL(w, rawURL)
+	if !ok {
+		return
+	}
+	video, err := h.Store.Create(r.Context(), name, sourceTitle, url)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if _, err := h.Downloader.StartDownload(r.Context(), video, url, formatID, req); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	video, err = h.Store.Get(r.Context(), video.ID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusCreated, services.ToVideoDTO(video))
+}
+
+// ListProgress godoc
+// @Summary List progress of all running jobs
+// @ID listProgress
+// @Tags videos
+// @Produce json
+// @Success 200 {array} services.Progress
+// @Router /api/videos/progress [get]
+func (h *VideoHandler) ListProgress(w http.ResponseWriter, r *http.Request) {
+	progress := h.Downloader.All()
+	if progress == nil {
+		progress = []services.Progress{}
+	}
 	utils.RespondWithJSON(w, http.StatusOK, progress)
 }
 
-// ListAllProgress godoc
-// @Summary List all video download progress
-// @Description Get the current download progress for all active video downloads
-// @ID listAllProgress
-// @Tags videos
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]services.DownloadProgressDTO
-// @Router /api/videos/progress [get]
-func (h *VideoHandler) ListAllProgress(w http.ResponseWriter, r *http.Request) {
-	allProgress := h.Downloader.GetAllProgress()
-	utils.RespondWithJSON(w, http.StatusOK, allProgress)
-}
-
 // GetVideo godoc
-// @Summary Get a video by ID
-// @Description Get details of a specific video
+// @Summary Get a video with all versions
 // @ID getVideo
 // @Tags videos
-// @Accept json
 // @Produce json
 // @Param id path string true "Video ID"
-// @Success 200 {object} VideoResponse
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 200 {object} services.VideoDTO
+// @Failure 404 {object} utils.ErrorResponse
 // @Router /api/videos/{id} [get]
 func (h *VideoHandler) GetVideo(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	var id pgtype.UUID
-	if err := id.Scan(idStr); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid video ID")
+	video, ok := h.video(w, r)
+	if !ok {
 		return
 	}
-
-	video, err := h.Queries.GetVideo(r.Context(), id)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusNotFound, "Video not found")
-		return
-	}
-
-	h.backfillFileSize(&video)
-	utils.RespondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
+	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
 }
 
 type PaginatedVideoResponse struct {
-	TotalCount  int64           `json:"totalCount"`
-	TotalPages  int             `json:"totalPages"`
-	CurrentPage int             `json:"currentPage"`
-	Limit       int             `json:"limit"`
-	Videos      []VideoResponse `json:"videos"`
+	TotalCount  int64               `json:"totalCount"`
+	TotalPages  int                 `json:"totalPages"`
+	CurrentPage int                 `json:"currentPage"`
+	Limit       int                 `json:"limit"`
+	Videos      []services.VideoDTO `json:"videos"`
 }
 
 // ListVideos godoc
-// @Summary List all videos
-// @Description Get a paginated list of all videos with optional searching and ordering
+// @Summary List videos
+// @Description Paginated list with optional search. The newest videos are served from memory.
 // @ID listVideos
 // @Tags videos
-// @Accept json
 // @Produce json
-// @Param search query string false "Search by name or URL"
-// @Param order query string false "Order by (name_asc, name_desc, created_at_asc, created_at_desc, status_asc, status_desc)"
+// @Param search query string false "Search by name, title or URL"
+// @Param order query string false "name_asc, name_desc, created_at_asc, created_at_desc"
 // @Param page query int false "Page number (default: 1)"
-// @Param limit query int false "Number of items per page (default: 10)"
+// @Param limit query int false "Items per page (default: 12, max: 100)"
 // @Success 200 {object} PaginatedVideoResponse
-// @Failure 500 {object} map[string]string
+// @Failure 500 {object} utils.ErrorResponse
 // @Router /api/videos [get]
 func (h *VideoHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
-	search := r.URL.Query().Get("search")
-	order := r.URL.Query().Get("order")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
-
-	page := 1
-	limit := 10
-
-	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-		page = p
-	}
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-		limit = l
-	}
-
-	offset := (page - 1) * limit
-
-	searchParam := pgtype.Text{String: search, Valid: true}
-	orderParam := pgtype.Text{String: order, Valid: true}
-
-	totalCount, err := h.Queries.CountVideos(r.Context(), searchParam)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	videos, err := h.Queries.ListVideos(r.Context(), database.ListVideosParams{
-		Search:   searchParam,
-		Ordering: orderParam,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+	page, limit := utils.Pagination(r, 12)
+	videos, total, err := h.Store.List(r.Context(), services.ListQuery{
+		Search: strings.TrimSpace(r.URL.Query().Get("search")),
+		Order:  r.URL.Query().Get("order"),
+		Offset: (page - 1) * limit,
+		Limit:  limit,
 	})
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	responses := make([]VideoResponse, len(videos))
-	for i := range videos {
-		h.backfillFileSize(&videos[i])
-		responses[i] = mapVideoToResponse(videos[i])
+	dtos := make([]services.VideoDTO, len(videos))
+	for i, v := range videos {
+		dtos[i] = services.ToVideoDTO(v)
 	}
-
-	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
-
 	utils.RespondWithJSON(w, http.StatusOK, PaginatedVideoResponse{
-		TotalCount:  totalCount,
-		TotalPages:  totalPages,
+		TotalCount:  total,
+		TotalPages:  int((total + int64(limit) - 1) / int64(limit)),
 		CurrentPage: page,
 		Limit:       limit,
-		Videos:      responses,
+		Videos:      dtos,
 	})
 }
 
@@ -390,97 +223,298 @@ type UpdateVideoRequest struct {
 	Name string `json:"name"`
 }
 
-func (r *UpdateVideoRequest) Validate() error {
-	if r.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-	return nil
-}
-
 // UpdateVideo godoc
-// @Summary Update a video
-// @Description Update video details like name
+// @Summary Rename a video
+// @Description Renaming is instant and works while the video is still downloading.
 // @ID updateVideo
 // @Tags videos
 // @Accept json
 // @Produce json
 // @Param id path string true "Video ID"
-// @Param video body UpdateVideoRequest true "Updated video details"
-// @Success 200 {object} VideoResponse
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Param video body UpdateVideoRequest true "New name"
+// @Success 200 {object} services.VideoDTO
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
 // @Router /api/videos/{id} [put]
 func (h *VideoHandler) UpdateVideo(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	var id pgtype.UUID
-	if err := id.Scan(idStr); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid video ID")
-		return
-	}
-
 	var req UpdateVideoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	if err := req.Validate(); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 300 {
+		utils.RespondWithError(w, http.StatusBadRequest, "name must be between 1 and 300 characters")
 		return
 	}
-
-	video, err := h.Queries.UpdateVideoName(r.Context(), database.UpdateVideoNameParams{
-		ID:   id,
-		Name: req.Name,
-	})
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+	video, err := h.Store.Rename(r.Context(), chi.URLParam(r, "id"), name)
+	if respondStoreError(w, err) {
 		return
 	}
-
-	utils.RespondWithJSON(w, http.StatusOK, mapVideoToResponse(video))
+	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
 }
 
 // DeleteVideo godoc
-// @Summary Delete a video
-// @Description Delete a video record by ID and its associated files
+// @Summary Delete a video and all its versions
 // @ID deleteVideo
 // @Tags videos
+// @Param id path string true "Video ID"
+// @Success 204
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/videos/{id} [delete]
+func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
+	_, err := h.Downloader.DeleteVideo(r.Context(), chi.URLParam(r, "id"))
+	if respondStoreError(w, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetThumbnail godoc
+// @Summary Get a video's thumbnail
+// @ID getThumbnail
+// @Tags videos
+// @Produce jpeg
+// @Param id path string true "Video ID"
+// @Success 200 {file} binary
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/videos/{id}/thumbnail [get]
+func (h *VideoHandler) GetThumbnail(w http.ResponseWriter, r *http.Request) {
+	video, ok := h.video(w, r)
+	if !ok {
+		return
+	}
+	if video.ThumbnailFileName == nil {
+		utils.RespondWithError(w, http.StatusNotFound, "no thumbnail")
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	http.ServeFile(w, r, h.Downloader.Path(*video.ThumbnailFileName))
+}
+
+type CreateVersionRequest struct {
+	SourceFileID string           `json:"sourceFileId,omitempty"`
+	Encoding     encoding.Request `json:"encoding"`
+	MakePrimary  *bool            `json:"makePrimary,omitempty"`
+}
+
+// CreateVersion godoc
+// @Summary Re-encode a video into a new version
+// @Description Encodes from the given version, or from the original (else the default) when omitted.
+// @ID createVersion
+// @Tags versions
 // @Accept json
 // @Produce json
 // @Param id path string true "Video ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/videos/{id} [delete]
-func (h *VideoHandler) DeleteVideo(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	var id pgtype.UUID
-	if err := id.Scan(idStr); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid video ID")
+// @Param request body CreateVersionRequest true "Encoding options"
+// @Success 201 {object} services.VideoFileDTO
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 409 {object} utils.ErrorResponse
+// @Router /api/videos/{id}/files [post]
+func (h *VideoHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
+	var req CreateVersionRequest
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
+	video, ok := h.video(w, r)
+	if !ok {
+		return
+	}
+	source, ok := sourceVersion(video, req.SourceFileID)
+	if !ok {
+		utils.RespondWithError(w, http.StatusNotFound, "source version not found")
+		return
+	}
+	makePrimary := req.MakePrimary == nil || *req.MakePrimary
+	file, err := h.Downloader.StartEncode(r.Context(), video, source, req.Encoding, makePrimary)
+	switch {
+	case errors.Is(err, services.ErrNothingToDo), errors.Is(err, services.ErrFileNotReady):
+		utils.RespondWithError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+	default:
+		utils.RespondWithJSON(w, http.StatusCreated, services.ToFileDTO(file))
+	}
+}
 
-	// Fetch video details to get filenames for cleanup
-	video, err := h.Queries.GetVideo(r.Context(), id)
+type UpdateVersionRequest struct {
+	Primary bool `json:"primary"`
+}
+
+// UpdateVersion godoc
+// @Summary Make a version the default one
+// @ID updateVersion
+// @Tags versions
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID"
+// @Param fileId path string true "Version ID"
+// @Param request body UpdateVersionRequest true "Changes"
+// @Success 200 {object} services.VideoDTO
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 409 {object} utils.ErrorResponse
+// @Router /api/videos/{id}/files/{fileId} [patch]
+func (h *VideoHandler) UpdateVersion(w http.ResponseWriter, r *http.Request) {
+	var req UpdateVersionRequest
+	if !utils.DecodeJSON(w, r, &req) {
+		return
+	}
+	video, file, ok := h.version(w, r)
+	if !ok {
+		return
+	}
+	if req.Primary {
+		if file.Status != services.FileCompleted {
+			utils.RespondWithError(w, http.StatusConflict, "only finished versions can be the default")
+			return
+		}
+		var err error
+		video, err = h.Store.SetPrimary(r.Context(), video.ID, &file.ID)
+		if respondStoreError(w, err) {
+			return
+		}
+	}
+	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
+}
+
+// DeleteVersion godoc
+// @Summary Delete a version
+// @Description The last remaining version cannot be deleted; delete the video instead.
+// @ID deleteVersion
+// @Tags versions
+// @Produce json
+// @Param id path string true "Video ID"
+// @Param fileId path string true "Version ID"
+// @Success 200 {object} services.VideoDTO
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 409 {object} utils.ErrorResponse
+// @Router /api/videos/{id}/files/{fileId} [delete]
+func (h *VideoHandler) DeleteVersion(w http.ResponseWriter, r *http.Request) {
+	video, file, ok := h.version(w, r)
+	if !ok {
+		return
+	}
+	if len(video.Files) <= 1 {
+		utils.RespondWithError(w, http.StatusConflict, "cannot delete the only version; delete the video instead")
+		return
+	}
+	video, err := h.Downloader.DeleteFile(r.Context(), video.ID, file.ID)
+	if respondStoreError(w, err) {
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
+}
+
+// CancelVersion godoc
+// @Summary Cancel a queued or running download/encode
+// @ID cancelVersion
+// @Tags versions
+// @Param id path string true "Video ID"
+// @Param fileId path string true "Version ID"
+// @Success 204
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/videos/{id}/files/{fileId}/cancel [post]
+func (h *VideoHandler) CancelVersion(w http.ResponseWriter, r *http.Request) {
+	if _, file, ok := h.version(w, r); ok {
+		if !h.Downloader.Cancel(file.ID) {
+			utils.RespondWithError(w, http.StatusNotFound, "no running job for this version")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// GetFile godoc
+// @Summary Stream or download a version
+// @Description Supports range requests. With download=1 the file is sent as an attachment named after the video.
+// @ID getFile
+// @Tags versions
+// @Produce octet-stream
+// @Param fileId path string true "Version ID"
+// @Param download query bool false "Send as attachment"
+// @Success 200 {file} binary
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/files/{fileId} [get]
+func (h *VideoHandler) GetFile(w http.ResponseWriter, r *http.Request) {
+	video, file, err := h.Store.GetByFile(r.Context(), chi.URLParam(r, "fileId"))
+	if respondStoreError(w, err) {
+		return
+	}
+	if file.Status != services.FileCompleted || file.FileName == nil {
+		utils.RespondWithError(w, http.StatusNotFound, "file is not ready")
+		return
+	}
+	path := h.Downloader.Path(*file.FileName)
+	f, err := os.Open(path)
 	if err != nil {
-		utils.RespondWithError(w, http.StatusNotFound, "Video not found")
+		utils.RespondWithError(w, http.StatusNotFound, "file missing on disk")
 		return
 	}
-
-	// Delete from database first
-	err = h.Queries.DeleteVideo(r.Context(), id)
+	defer f.Close()
+	info, err := f.Stat()
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Delete files from filesystem
-	h.Downloader.DeleteVideoFiles(video.FileName.String, video.ThumbnailFileName.String)
+	ext := filepath.Ext(*file.FileName)
+	name := utils.SanitizeFilename(video.Name)
+	if len(video.Files) > 1 {
+		name = utils.SanitizeFilename(fmt.Sprintf("%s (%s)", video.Name, strings.ReplaceAll(file.Label, " · ", " ")))
+	}
+	disposition := "inline"
+	if r.URL.Query().Get("download") == "1" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name + ext}))
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	http.ServeContent(w, r, name+ext, info.ModTime(), f)
+}
 
-	h.Ws.Broadcast(services.WsEventVideoDeleted, map[string]string{"id": idStr})
+func (h *VideoHandler) video(w http.ResponseWriter, r *http.Request) (services.Video, bool) {
+	video, err := h.Store.Get(r.Context(), chi.URLParam(r, "id"))
+	return video, !respondStoreError(w, err)
+}
 
-	w.WriteHeader(http.StatusNoContent)
+func (h *VideoHandler) version(w http.ResponseWriter, r *http.Request) (services.Video, services.VideoFile, bool) {
+	video, ok := h.video(w, r)
+	if !ok {
+		return video, services.VideoFile{}, false
+	}
+	file, ok := video.File(chi.URLParam(r, "fileId"))
+	if !ok {
+		utils.RespondWithError(w, http.StatusNotFound, "version not found")
+	}
+	return video, file, ok
+}
+
+func sourceVersion(v services.Video, id string) (services.VideoFile, bool) {
+	if id != "" {
+		return v.File(id)
+	}
+	if f, ok := v.Original(); ok {
+		return f, true
+	}
+	return v.Primary()
+}
+
+func sanitizeURL(w http.ResponseWriter, raw string) (string, bool) {
+	url, err := utils.SanitizeURL(strings.TrimSpace(raw))
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid URL")
+		return "", false
+	}
+	return url, true
+}
+
+func respondStoreError(w http.ResponseWriter, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, services.ErrNotFound):
+		utils.RespondWithError(w, http.StatusNotFound, "not found")
+	default:
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+	}
+	return true
 }

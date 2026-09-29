@@ -1,38 +1,39 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/Azmekk/Vidra/backend/gen/database"
 	"github.com/Azmekk/Vidra/backend/services"
 	"github.com/Azmekk/Vidra/backend/utils"
 )
 
 type YtDlpHandler struct {
-	Queries    *database.Queries
-	Downloader *services.DownloaderService
+	Ytdlp *services.YtdlpService
 }
 
-func NewYtDlpHandler(queries *database.Queries, downloader *services.DownloaderService) *YtDlpHandler {
-	return &YtDlpHandler{Queries: queries, Downloader: downloader}
+func NewYtDlpHandler(ytdlp *services.YtdlpService) *YtDlpHandler {
+	return &YtDlpHandler{Ytdlp: ytdlp}
+}
+
+type UpdateYtdlpResponse struct {
+	Output string `json:"output"`
 }
 
 // UpdateYtdlp godoc
 // @Summary Update yt-dlp
-// @Description Execute yt-dlp -U to update the binary
+// @Description Runs yt-dlp -U to update the binary
 // @ID updateYtdlp
 // @Tags ytdlp
 // @Produce json
-// @Success 200 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 200 {object} UpdateYtdlpResponse
+// @Failure 500 {object} utils.ErrorResponse
 // @Router /api/yt-dlp/update [post]
 func (h *YtDlpHandler) UpdateYtdlp(w http.ResponseWriter, r *http.Request) {
-	output, err := h.Downloader.UpdateYtdlp(r.Context())
+	output, err := h.Ytdlp.UpdateCommand(r.Context()).CombinedOutput()
 	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Update failed: %v\nOutput: %s", err, output))
+		utils.RespondWithError(w, http.StatusInternalServerError, "Update failed: "+err.Error()+"\n"+string(output))
 		return
 	}
-
-	utils.RespondWithJSON(w, http.StatusOK, map[string]string{"output": output})
+	utils.RespondWithJSON(w, http.StatusOK, UpdateYtdlpResponse{Output: strings.TrimSpace(string(output))})
 }
