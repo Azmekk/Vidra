@@ -21,6 +21,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -56,7 +57,7 @@ export const updateYtdlp = async ( options?: Parameters<typeof apiFetch>[1]): Pr
 
 export const getUpdateYtdlpMutationKey = () => ['updateYtdlp'] as const;
 
-export const getUpdateYtdlpMutationOptions = <TError = UtilsErrorResponse,
+export const getUpdateYtdlpMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateYtdlp>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateYtdlp>>, TError,void, TContext> => {
 
@@ -85,13 +86,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateYtdlpMutationResult = NonNullable<Awaited<ReturnType<typeof updateYtdlp>>>
 
-    export type UpdateYtdlpMutationError = UtilsErrorResponse
+    export type UpdateYtdlpMutationError = ErrorType<UtilsErrorResponse>
 
 
     /**
  * @summary Update yt-dlp
  */
-export const useUpdateYtdlp = <TError = UtilsErrorResponse,
+export const useUpdateYtdlp = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateYtdlp>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateYtdlp>>,

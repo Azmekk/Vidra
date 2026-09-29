@@ -10,6 +10,7 @@ import { z } from "zod";
 import { setUnauthorizedHandler } from "@/api/fetcher";
 import { getGetAuthStatusQueryOptions } from "@/api/gen/auth/auth";
 import { AppShell } from "@/components/app-shell";
+import { AuthSkeleton, LibrarySkeleton, PageSkeleton, ShellSkeleton } from "@/components/skeletons";
 import { clearCache, queryClient } from "@/lib/query";
 import { DownloadPage } from "@/routes/download";
 import { ErrorsPage } from "@/routes/errors";
@@ -33,6 +34,7 @@ const loginRoute = createRoute({
 		if (status.setupRequired) throw redirect({ to: "/setup" });
 		if (status.user) throw redirect({ href: search.redirect ?? "/" });
 	},
+	pendingComponent: AuthSkeleton,
 	component: LoginPage,
 });
 
@@ -42,6 +44,7 @@ const setupRoute = createRoute({
 	beforeLoad: async () => {
 		if (!(await authStatus()).setupRequired) throw redirect({ to: "/login" });
 	},
+	pendingComponent: AuthSkeleton,
 	component: SetupPage,
 });
 
@@ -54,6 +57,7 @@ const appRoute = createRoute({
 		if (!status.user) throw redirect({ to: "/login", search: { redirect: location.href } });
 		return { user: status.user };
 	},
+	pendingComponent: ShellSkeleton,
 	component: AppShell,
 });
 
@@ -64,6 +68,7 @@ const libraryRoute = createRoute({
 		q: z.string().optional(),
 		order: z.enum(["created_at_desc", "created_at_asc", "name_asc", "name_desc"]).optional(),
 	}),
+	pendingComponent: LibrarySkeleton,
 	component: LibraryPage,
 });
 
@@ -74,18 +79,21 @@ const downloadRoute = createRoute({
 		url: z.string().optional(),
 		quick: z.coerce.boolean().optional(),
 	}),
+	pendingComponent: PageSkeleton,
 	component: DownloadPage,
 });
 
 const settingsRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/settings",
+	pendingComponent: PageSkeleton,
 	component: SettingsPage,
 });
 
 const errorsRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: "/errors",
+	pendingComponent: PageSkeleton,
 	component: ErrorsPage,
 });
 
@@ -100,6 +108,8 @@ export const router = createRouter({
 	context: { queryClient },
 	defaultPreload: "intent",
 	defaultPreloadStaleTime: 0,
+	defaultPendingMs: 300,
+	defaultPendingMinMs: 400,
 	scrollRestoration: true,
 });
 

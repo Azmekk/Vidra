@@ -38,6 +38,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -100,7 +101,7 @@ export const getListVideosQueryKey = (params?: ListVideosParams,) => {
     }
 
 
-export const getListVideosQueryOptions = <TData = Awaited<ReturnType<typeof listVideos>>, TError = UtilsErrorResponse>(params?: ListVideosParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getListVideosQueryOptions = <TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<UtilsErrorResponse>>(params?: ListVideosParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -119,10 +120,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListVideosQueryResult = NonNullable<Awaited<ReturnType<typeof listVideos>>>
-export type ListVideosQueryError = UtilsErrorResponse
+export type ListVideosQueryError = ErrorType<UtilsErrorResponse>
 
 
-export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = UtilsErrorResponse>(
+export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<UtilsErrorResponse>>(
  params: undefined |  ListVideosParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listVideos>>,
@@ -132,7 +133,7 @@ export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TE
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = UtilsErrorResponse>(
+export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListVideosParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listVideos>>,
@@ -142,7 +143,7 @@ export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TE
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = UtilsErrorResponse>(
+export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListVideosParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -150,7 +151,7 @@ export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TE
  * @summary List videos
  */
 
-export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = UtilsErrorResponse>(
+export function useListVideos<TData = Awaited<ReturnType<typeof listVideos>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListVideosParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listVideos>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -209,7 +210,7 @@ return apiFetch<ServicesVideoDTO>(getCreateVideoUrl(),
 
 export const getCreateVideoMutationKey = () => ['createVideo'] as const;
 
-export const getCreateVideoMutationOptions = <TError = UtilsErrorResponse,
+export const getCreateVideoMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,CreateVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,CreateVideoMutationVariables, TContext> => {
 
@@ -238,13 +239,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateVideoMutationResult = NonNullable<Awaited<ReturnType<typeof createVideo>>>
     export type CreateVideoMutationBody = HandlersCreateVideoRequest
-    export type CreateVideoMutationError = UtilsErrorResponse
+    export type CreateVideoMutationError = ErrorType<UtilsErrorResponse>
     export type CreateVideoMutationVariables = {data: HandlersCreateVideoRequest}
 
     /**
  * @summary Download a video with chosen format and encoding
  */
-export const useCreateVideo = <TError = UtilsErrorResponse,
+export const useCreateVideo = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVideo>>, TError,CreateVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createVideo>>,
@@ -296,7 +297,7 @@ return apiFetch<ServicesVideoMetadata>(getGetMetadataUrl(),
 
 export const getGetMetadataMutationKey = () => ['getMetadata'] as const;
 
-export const getGetMetadataMutationOptions = <TError = UtilsErrorResponse,
+export const getGetMetadataMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMetadata>>, TError,GetMetadataMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof getMetadata>>, TError,GetMetadataMutationVariables, TContext> => {
 
@@ -325,13 +326,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type GetMetadataMutationResult = NonNullable<Awaited<ReturnType<typeof getMetadata>>>
     export type GetMetadataMutationBody = HandlersMetadataRequest
-    export type GetMetadataMutationError = UtilsErrorResponse
+    export type GetMetadataMutationError = ErrorType<UtilsErrorResponse>
     export type GetMetadataMutationVariables = {data: HandlersMetadataRequest}
 
     /**
  * @summary Get video metadata and format options
  */
-export const useGetMetadata = <TError = UtilsErrorResponse,
+export const useGetMetadata = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMetadata>>, TError,GetMetadataMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof getMetadata>>,
@@ -374,7 +375,7 @@ export const getListProgressQueryKey = () => {
     }
 
 
-export const getListProgressQueryOptions = <TData = Awaited<ReturnType<typeof listProgress>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getListProgressQueryOptions = <TData = Awaited<ReturnType<typeof listProgress>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -393,10 +394,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListProgressQueryResult = NonNullable<Awaited<ReturnType<typeof listProgress>>>
-export type ListProgressQueryError = unknown
+export type ListProgressQueryError = ErrorType<unknown>
 
 
-export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = unknown>(
+export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = ErrorType<unknown>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listProgress>>,
@@ -406,7 +407,7 @@ export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = unknown>(
+export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listProgress>>,
@@ -416,7 +417,7 @@ export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = unknown>(
+export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -424,7 +425,7 @@ export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>
  * @summary List progress of all running jobs
  */
 
-export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = unknown>(
+export function useListProgress<TData = Awaited<ReturnType<typeof listProgress>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listProgress>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -483,7 +484,7 @@ return apiFetch<ServicesVideoDTO>(getQuickDownloadUrl(),
 
 export const getQuickDownloadMutationKey = () => ['quickDownload'] as const;
 
-export const getQuickDownloadMutationOptions = <TError = UtilsErrorResponse,
+export const getQuickDownloadMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickDownload>>, TError,QuickDownloadMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof quickDownload>>, TError,QuickDownloadMutationVariables, TContext> => {
 
@@ -512,13 +513,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type QuickDownloadMutationResult = NonNullable<Awaited<ReturnType<typeof quickDownload>>>
     export type QuickDownloadMutationBody = HandlersQuickDownloadRequest
-    export type QuickDownloadMutationError = UtilsErrorResponse
+    export type QuickDownloadMutationError = ErrorType<UtilsErrorResponse>
     export type QuickDownloadMutationVariables = {data: HandlersQuickDownloadRequest}
 
     /**
  * @summary Start a download immediately with default settings and a random name
  */
-export const useQuickDownload = <TError = UtilsErrorResponse,
+export const useQuickDownload = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickDownload>>, TError,QuickDownloadMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof quickDownload>>,
@@ -561,7 +562,7 @@ export const getGetVideoQueryKey = (id: string,) => {
     }
 
 
-export const getGetVideoQueryOptions = <TData = Awaited<ReturnType<typeof getVideo>>, TError = UtilsErrorResponse>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getGetVideoQueryOptions = <TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<UtilsErrorResponse>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -580,10 +581,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetVideoQueryResult = NonNullable<Awaited<ReturnType<typeof getVideo>>>
-export type GetVideoQueryError = UtilsErrorResponse
+export type GetVideoQueryError = ErrorType<UtilsErrorResponse>
 
 
-export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = UtilsErrorResponse>(
+export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<UtilsErrorResponse>>(
  id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getVideo>>,
@@ -593,7 +594,7 @@ export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = UtilsErrorResponse>(
+export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<UtilsErrorResponse>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getVideo>>,
@@ -603,7 +604,7 @@ export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = UtilsErrorResponse>(
+export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<UtilsErrorResponse>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -611,7 +612,7 @@ export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError
  * @summary Get a video with all versions
  */
 
-export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = UtilsErrorResponse>(
+export function useGetVideo<TData = Awaited<ReturnType<typeof getVideo>>, TError = ErrorType<UtilsErrorResponse>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVideo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -672,7 +673,7 @@ return apiFetch<ServicesVideoDTO>(getUpdateVideoUrl(id),
 
 export const getUpdateVideoMutationKey = () => ['updateVideo'] as const;
 
-export const getUpdateVideoMutationOptions = <TError = UtilsErrorResponse,
+export const getUpdateVideoMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVideo>>, TError,UpdateVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateVideo>>, TError,UpdateVideoMutationVariables, TContext> => {
 
@@ -701,13 +702,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateVideoMutationResult = NonNullable<Awaited<ReturnType<typeof updateVideo>>>
     export type UpdateVideoMutationBody = HandlersUpdateVideoRequest
-    export type UpdateVideoMutationError = UtilsErrorResponse
+    export type UpdateVideoMutationError = ErrorType<UtilsErrorResponse>
     export type UpdateVideoMutationVariables = {id: string;data: HandlersUpdateVideoRequest}
 
     /**
  * @summary Rename a video
  */
-export const useUpdateVideo = <TError = UtilsErrorResponse,
+export const useUpdateVideo = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVideo>>, TError,UpdateVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateVideo>>,
@@ -745,7 +746,7 @@ export const deleteVideo = async (id: string, options?: Parameters<typeof apiFet
 
 export const getDeleteVideoMutationKey = () => ['deleteVideo'] as const;
 
-export const getDeleteVideoMutationOptions = <TError = UtilsErrorResponse,
+export const getDeleteVideoMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,DeleteVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,DeleteVideoMutationVariables, TContext> => {
 
@@ -774,13 +775,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteVideoMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVideo>>>
 
-    export type DeleteVideoMutationError = UtilsErrorResponse
+    export type DeleteVideoMutationError = ErrorType<UtilsErrorResponse>
     export type DeleteVideoMutationVariables = {id: string}
 
     /**
  * @summary Delete a video and all its versions
  */
-export const useDeleteVideo = <TError = UtilsErrorResponse,
+export const useDeleteVideo = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVideo>>, TError,DeleteVideoMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteVideo>>,
@@ -823,7 +824,7 @@ export const getGetThumbnailQueryKey = (id: string,) => {
     }
 
 
-export const getGetThumbnailQueryOptions = <TData = Awaited<ReturnType<typeof getThumbnail>>, TError = Blob>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getGetThumbnailQueryOptions = <TData = Awaited<ReturnType<typeof getThumbnail>>, TError = ErrorType<Blob>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -842,10 +843,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetThumbnailQueryResult = NonNullable<Awaited<ReturnType<typeof getThumbnail>>>
-export type GetThumbnailQueryError = Blob
+export type GetThumbnailQueryError = ErrorType<Blob>
 
 
-export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = Blob>(
+export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = ErrorType<Blob>>(
  id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getThumbnail>>,
@@ -855,7 +856,7 @@ export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = Blob>(
+export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = ErrorType<Blob>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getThumbnail>>,
@@ -865,7 +866,7 @@ export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = Blob>(
+export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = ErrorType<Blob>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -873,7 +874,7 @@ export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>
  * @summary Get a video's thumbnail
  */
 
-export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = Blob>(
+export function useGetThumbnail<TData = Awaited<ReturnType<typeof getThumbnail>>, TError = ErrorType<Blob>>(
  id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getThumbnail>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

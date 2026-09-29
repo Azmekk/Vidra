@@ -7,6 +7,15 @@
 		<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#020618" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<title>Vidra</title>
+		<script>
+			try {
+				const t = localStorage.getItem("vidra-theme");
+				if (t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+					document.documentElement.classList.add("dark");
+					document.documentElement.style.colorScheme = "dark";
+				}
+			} catch {}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

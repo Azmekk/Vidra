@@ -27,6 +27,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -88,7 +89,7 @@ export const getListRecentErrorsQueryKey = (params?: ListRecentErrorsParams,) =>
     }
 
 
-export const getListRecentErrorsQueryOptions = <TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = UtilsErrorResponse>(params?: ListRecentErrorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getListRecentErrorsQueryOptions = <TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = ErrorType<UtilsErrorResponse>>(params?: ListRecentErrorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -107,10 +108,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListRecentErrorsQueryResult = NonNullable<Awaited<ReturnType<typeof listRecentErrors>>>
-export type ListRecentErrorsQueryError = UtilsErrorResponse
+export type ListRecentErrorsQueryError = ErrorType<UtilsErrorResponse>
 
 
-export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = UtilsErrorResponse>(
+export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = ErrorType<UtilsErrorResponse>>(
  params: undefined |  ListRecentErrorsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listRecentErrors>>,
@@ -120,7 +121,7 @@ export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecent
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = UtilsErrorResponse>(
+export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListRecentErrorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listRecentErrors>>,
@@ -130,7 +131,7 @@ export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecent
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = UtilsErrorResponse>(
+export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListRecentErrorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -138,7 +139,7 @@ export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecent
  * @summary List recent errors
  */
 
-export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = UtilsErrorResponse>(
+export function useListRecentErrors<TData = Awaited<ReturnType<typeof listRecentErrors>>, TError = ErrorType<UtilsErrorResponse>>(
  params?: ListRecentErrorsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRecentErrors>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

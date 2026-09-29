@@ -25,6 +25,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -79,7 +80,7 @@ export const getGetSystemInfoQueryKey = () => {
     }
 
 
-export const getGetSystemInfoQueryOptions = <TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getGetSystemInfoQueryOptions = <TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -98,10 +99,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetSystemInfoQueryResult = NonNullable<Awaited<ReturnType<typeof getSystemInfo>>>
-export type GetSystemInfoQueryError = unknown
+export type GetSystemInfoQueryError = ErrorType<unknown>
 
 
-export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = unknown>(
+export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = ErrorType<unknown>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getSystemInfo>>,
@@ -111,7 +112,7 @@ export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = unknown>(
+export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getSystemInfo>>,
@@ -121,7 +122,7 @@ export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = unknown>(
+export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -129,7 +130,7 @@ export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo
  * @summary Get server status and downloads directory size
  */
 
-export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = unknown>(
+export function useGetSystemInfo<TData = Awaited<ReturnType<typeof getSystemInfo>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSystemInfo>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

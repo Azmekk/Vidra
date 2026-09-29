@@ -34,6 +34,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -99,7 +100,7 @@ export const getGetFileQueryKey = (fileId: string,
     }
 
 
-export const getGetFileQueryOptions = <TData = Awaited<ReturnType<typeof getFile>>, TError = Blob>(fileId: string,
+export const getGetFileQueryOptions = <TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorType<Blob>>(fileId: string,
     params?: GetFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
@@ -119,10 +120,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetFileQueryResult = NonNullable<Awaited<ReturnType<typeof getFile>>>
-export type GetFileQueryError = Blob
+export type GetFileQueryError = ErrorType<Blob>
 
 
-export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = Blob>(
+export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorType<Blob>>(
  fileId: string,
     params: undefined |  GetFileParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -133,7 +134,7 @@ export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError =
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = Blob>(
+export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorType<Blob>>(
  fileId: string,
     params?: GetFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -144,7 +145,7 @@ export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError =
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = Blob>(
+export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorType<Blob>>(
  fileId: string,
     params?: GetFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
@@ -153,7 +154,7 @@ export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError =
  * @summary Stream or download a version
  */
 
-export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = Blob>(
+export function useGetFile<TData = Awaited<ReturnType<typeof getFile>>, TError = ErrorType<Blob>>(
  fileId: string,
     params?: GetFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getFile>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
@@ -215,7 +216,7 @@ return apiFetch<ServicesVideoFileDTO>(getCreateVersionUrl(id),
 
 export const getCreateVersionMutationKey = () => ['createVersion'] as const;
 
-export const getCreateVersionMutationOptions = <TError = UtilsErrorResponse,
+export const getCreateVersionMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVersion>>, TError,CreateVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createVersion>>, TError,CreateVersionMutationVariables, TContext> => {
 
@@ -244,13 +245,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateVersionMutationResult = NonNullable<Awaited<ReturnType<typeof createVersion>>>
     export type CreateVersionMutationBody = HandlersCreateVersionRequest
-    export type CreateVersionMutationError = UtilsErrorResponse
+    export type CreateVersionMutationError = ErrorType<UtilsErrorResponse>
     export type CreateVersionMutationVariables = {id: string;data: HandlersCreateVersionRequest}
 
     /**
  * @summary Re-encode a video into a new version
  */
-export const useCreateVersion = <TError = UtilsErrorResponse,
+export const useCreateVersion = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVersion>>, TError,CreateVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createVersion>>,
@@ -291,7 +292,7 @@ export const deleteVersion = async (id: string,
 
 export const getDeleteVersionMutationKey = () => ['deleteVersion'] as const;
 
-export const getDeleteVersionMutationOptions = <TError = UtilsErrorResponse,
+export const getDeleteVersionMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVersion>>, TError,DeleteVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteVersion>>, TError,DeleteVersionMutationVariables, TContext> => {
 
@@ -320,13 +321,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteVersionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVersion>>>
 
-    export type DeleteVersionMutationError = UtilsErrorResponse
+    export type DeleteVersionMutationError = ErrorType<UtilsErrorResponse>
     export type DeleteVersionMutationVariables = {id: string;fileId: string}
 
     /**
  * @summary Delete a version
  */
-export const useDeleteVersion = <TError = UtilsErrorResponse,
+export const useDeleteVersion = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVersion>>, TError,DeleteVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteVersion>>,
@@ -381,7 +382,7 @@ return apiFetch<ServicesVideoDTO>(getUpdateVersionUrl(id,fileId),
 
 export const getUpdateVersionMutationKey = () => ['updateVersion'] as const;
 
-export const getUpdateVersionMutationOptions = <TError = UtilsErrorResponse,
+export const getUpdateVersionMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVersion>>, TError,UpdateVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateVersion>>, TError,UpdateVersionMutationVariables, TContext> => {
 
@@ -410,13 +411,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateVersionMutationResult = NonNullable<Awaited<ReturnType<typeof updateVersion>>>
     export type UpdateVersionMutationBody = HandlersUpdateVersionRequest
-    export type UpdateVersionMutationError = UtilsErrorResponse
+    export type UpdateVersionMutationError = ErrorType<UtilsErrorResponse>
     export type UpdateVersionMutationVariables = {id: string;fileId: string;data: HandlersUpdateVersionRequest}
 
     /**
  * @summary Make a version the default one
  */
-export const useUpdateVersion = <TError = UtilsErrorResponse,
+export const useUpdateVersion = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVersion>>, TError,UpdateVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateVersion>>,
@@ -456,7 +457,7 @@ export const cancelVersion = async (id: string,
 
 export const getCancelVersionMutationKey = () => ['cancelVersion'] as const;
 
-export const getCancelVersionMutationOptions = <TError = UtilsErrorResponse,
+export const getCancelVersionMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelVersion>>, TError,CancelVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof cancelVersion>>, TError,CancelVersionMutationVariables, TContext> => {
 
@@ -485,13 +486,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CancelVersionMutationResult = NonNullable<Awaited<ReturnType<typeof cancelVersion>>>
 
-    export type CancelVersionMutationError = UtilsErrorResponse
+    export type CancelVersionMutationError = ErrorType<UtilsErrorResponse>
     export type CancelVersionMutationVariables = {id: string;fileId: string}
 
     /**
  * @summary Cancel a queued or running download/encode
  */
-export const useCancelVersion = <TError = UtilsErrorResponse,
+export const useCancelVersion = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelVersion>>, TError,CancelVersionMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof cancelVersion>>,

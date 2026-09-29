@@ -32,6 +32,7 @@ import type {
 } from '../model';
 
 import { apiFetch } from '../../fetcher.ts';
+import type { ErrorType } from '../../fetcher.ts';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -87,7 +88,7 @@ export const getGetEncodingCapabilitiesQueryKey = () => {
     }
 
 
-export const getGetEncodingCapabilitiesQueryOptions = <TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+export const getGetEncodingCapabilitiesQueryOptions = <TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -106,10 +107,10 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetEncodingCapabilitiesQueryResult = NonNullable<Awaited<ReturnType<typeof getEncodingCapabilities>>>
-export type GetEncodingCapabilitiesQueryError = unknown
+export type GetEncodingCapabilitiesQueryError = ErrorType<unknown>
 
 
-export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = unknown>(
+export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = ErrorType<unknown>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getEncodingCapabilities>>,
@@ -119,7 +120,7 @@ export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof get
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = unknown>(
+export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getEncodingCapabilities>>,
@@ -129,7 +130,7 @@ export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof get
       >, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = unknown>(
+export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -137,7 +138,7 @@ export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof get
  * @summary List encoders supported by this server's ffmpeg
  */
 
-export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = unknown>(
+export function useGetEncodingCapabilities<TData = Awaited<ReturnType<typeof getEncodingCapabilities>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getEncodingCapabilities>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -197,7 +198,7 @@ return apiFetch<EncodingRecommendation>(getRecommendEncodingUrl(),
 
 export const getRecommendEncodingMutationKey = () => ['recommendEncoding'] as const;
 
-export const getRecommendEncodingMutationOptions = <TError = UtilsErrorResponse,
+export const getRecommendEncodingMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recommendEncoding>>, TError,RecommendEncodingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof recommendEncoding>>, TError,RecommendEncodingMutationVariables, TContext> => {
 
@@ -226,13 +227,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RecommendEncodingMutationResult = NonNullable<Awaited<ReturnType<typeof recommendEncoding>>>
     export type RecommendEncodingMutationBody = HandlersRecommendRequest
-    export type RecommendEncodingMutationError = UtilsErrorResponse
+    export type RecommendEncodingMutationError = ErrorType<UtilsErrorResponse>
     export type RecommendEncodingMutationVariables = {data: HandlersRecommendRequest}
 
     /**
  * @summary Recommend encoding settings for a goal
  */
-export const useRecommendEncoding = <TError = UtilsErrorResponse,
+export const useRecommendEncoding = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recommendEncoding>>, TError,RecommendEncodingMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof recommendEncoding>>,
