@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -58,7 +59,7 @@ func main() {
 	}
 	settings.OnChange(func(s services.Settings) {
 		if err := store.Warm(context.Background(), s.CacheSize); err != nil {
-			log.Printf("WARN: failed to resize video cache: %v\n", err)
+			slog.Warn("failed to resize video cache", "error", err)
 		}
 	})
 
@@ -83,6 +84,7 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(vmw.ClientIP)
+	r.Use(vmw.LogFailures)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
@@ -122,7 +124,7 @@ func main() {
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Printf("Vidra is running on http://localhost:%s\n", cfg.Port)
+	slog.Info("Vidra is running", "port", cfg.Port, "db", cfg.DBPath, "downloads", cfg.DownloadsDir, "insecure_cookies", cfg.InsecureCookies)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("❌ Server failed: %v", err)
 	}

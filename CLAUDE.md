@@ -64,6 +64,7 @@ Data model: `videos` (logical item, renamable, `primary_file_id`) → `video_fil
 - IDs are UUIDv7 strings (`services.NewID`), timestamps are millisecond RFC 3339 text.
 - Responses use DTOs, never raw sqlc rows. Swagger operation IDs are camelCase. Run swag with `--requiredByDefault`, so optional fields must be `omitempty`.
 - Env vars are limited to `PORT`, `DB_PATH`, `DOWNLOADS_DIR` and `VIDRA_INSECURE_COOKIES`. Everything else belongs in Settings.
+- Log with `log/slog`. `middleware.LogFailures` writes one line per failed API request; add context with `utils.Annotate(w, key, value)`. Log meaningful events (sign-ins, downloads, deletes, backups) at Info, never successful routine requests or progress.
 - `./scripts/check.sh` must pass, and deprecations (staticcheck SA1019) count as failures.
 
 ### Frontend

@@ -1,7 +1,7 @@
 package services
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -55,7 +55,7 @@ func NewWebSocketService() *WebSocketService {
 func (s *WebSocketService) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Failed to upgrade connection: %v", err)
+		slog.Warn("websocket upgrade failed", "error", err)
 		return
 	}
 	c := &wsClient{conn: conn, send: make(chan WsEvent, wsSendBuffer)}

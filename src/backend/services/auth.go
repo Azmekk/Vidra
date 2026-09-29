@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -24,6 +25,8 @@ var (
 	ErrInvalidSetupCode   = errors.New("invalid setup code")
 	ErrSetupDone          = errors.New("setup has already been completed")
 	ErrUnauthenticated    = errors.New("not authenticated")
+	ErrMalformedAPIToken  = errors.New("token does not start with " + apiTokenPrefix)
+	ErrUnknownAPIToken    = errors.New("token is unknown or was deleted")
 	usernameRe            = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,32}$`)
 )
 
@@ -134,12 +137,12 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (User, *Se
 
 func (s *AuthService) AuthenticateAPIToken(ctx context.Context, token string) (User, error) {
 	if !strings.HasPrefix(token, apiTokenPrefix) {
-		return User{}, ErrUnauthenticated
+		return User{}, ErrMalformedAPIToken
 	}
 	hash := hashToken(token)
 	user, err := s.queries.GetUserByAPIToken(ctx, hash)
 	if err != nil {
-		return User{}, ErrUnauthenticated
+		return User{}, ErrUnknownAPIToken
 	}
 	_ = s.queries.TouchAPIToken(ctx, hash)
 	return user, nil
@@ -185,7 +188,7 @@ func (s *AuthService) PruneSessions(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		if err := s.queries.DeleteExpiredSessions(ctx, time.Now().Unix()); err != nil {
-			log.Printf("WARN: failed to prune sessions: %v\n", err)
+			slog.Warn("failed to prune sessions", "error", err)
 		}
 		select {
 		case <-ctx.Done():

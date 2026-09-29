@@ -18,12 +18,19 @@ type ctxKey int
 const (
 	userKey ctxKey = iota
 	tokenKey
+	viaKey
 )
 
 // UserFrom returns the authenticated user stored by RequireAuth.
 func UserFrom(ctx context.Context) (services.User, bool) {
 	u, ok := ctx.Value(userKey).(services.User)
 	return u, ok
+}
+
+// AuthMethod reports how the request was authenticated: "session" or "token".
+func AuthMethod(ctx context.Context) string {
+	m, _ := ctx.Value(viaKey).(string)
+	return m
 }
 
 // SessionTokenFrom returns the session token used for the request, if any.
@@ -42,18 +49,27 @@ type Auth struct {
 func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
-			user, err := a.Service.AuthenticateAPIToken(ctx, strings.TrimSpace(bearer))
+		scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
+		if strings.EqualFold(scheme, "Bearer") {
+			user, err := a.Service.AuthenticateAPIToken(ctx, strings.TrimSpace(token))
 			if err != nil {
+				utils.Annotate(w, "reason", err.Error())
 				utils.RespondWithError(w, http.StatusUnauthorized, "invalid API token")
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, userKey, user)))
+			ctx = context.WithValue(ctx, userKey, user)
+			ctx = context.WithValue(ctx, viaKey, "token")
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
 		cookie, err := r.Cookie(SessionCookie)
 		if err != nil {
+			reason := "no session cookie or API token"
+			if scheme != "" {
+				reason = "Authorization header must be 'Bearer <token>'"
+			}
+			utils.Annotate(w, "reason", reason)
 			utils.RespondWithError(w, http.StatusUnauthorized, "not authenticated")
 			return
 		}
@@ -64,6 +80,7 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 		if !isSafeMethod(r.Method) && !sameOrigin(r) {
+			utils.Annotate(w, "origin", r.Header.Get("Origin"), "host", r.Host)
 			utils.RespondWithError(w, http.StatusForbidden, "cross-origin request blocked")
 			return
 		}
@@ -72,6 +89,7 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 		}
 		ctx = context.WithValue(ctx, userKey, user)
 		ctx = context.WithValue(ctx, tokenKey, cookie.Value)
+		ctx = context.WithValue(ctx, viaKey, "session")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

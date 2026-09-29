@@ -11,7 +11,16 @@ type ErrorResponse struct {
 }
 
 func RespondWithError(w http.ResponseWriter, code int, message string) {
+	Annotate(w, "error", message)
 	RespondWithJSON(w, code, ErrorResponse{Error: message})
+}
+
+// Annotate adds key/value pairs to the request's log line, which is written
+// only when the request fails.
+func Annotate(w http.ResponseWriter, args ...any) {
+	if a, ok := w.(interface{ Annotate(args ...any) }); ok {
+		a.Annotate(args...)
+	}
 }
 
 func RespondWithJSON(w http.ResponseWriter, code int, payload any) {

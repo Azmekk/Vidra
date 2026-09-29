@@ -2,11 +2,12 @@ package services
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,8 +95,11 @@ func (d *DownloaderService) Path(name string) string {
 func (d *DownloaderService) RecoverInterrupted(ctx context.Context) {
 	files, err := d.store.MarkInterrupted(ctx)
 	if err != nil {
-		log.Printf("WARN: failed to recover interrupted jobs: %v\n", err)
+		slog.Warn("failed to recover interrupted jobs", "error", err)
 		return
+	}
+	if len(files) > 0 {
+		slog.Warn("jobs interrupted by restart were marked as failed", "count", len(files))
 	}
 	for _, f := range files {
 		d.removeTemp(f.ID)
@@ -144,6 +148,7 @@ func (d *DownloaderService) enqueueEncode(ctx context.Context, videoID string, s
 	if err != nil {
 		return database.VideoFile{}, err
 	}
+	slog.Info("encode queued", "video", videoID, "file", file.ID, "label", rec.Label, "source", source.ID)
 	j := d.start(videoID, file.ID)
 	go d.runEncode(j, videoID, file, source, rec, makePrimary, removeSource)
 	return file, nil
@@ -159,6 +164,8 @@ func (d *DownloaderService) runDownload(j *job, videoID string, file database.Vi
 	}
 	defer d.downloads.release()
 	d.setStatus(j, videoID, file.ID, FileDownloading)
+	started := time.Now()
+	slog.Info("download started", "video", videoID, "file", file.ID, "url", url, "format", cmp.Or(formatID, "best"))
 
 	format := ""
 	if formatID != "" {
@@ -200,6 +207,7 @@ func (d *DownloaderService) runDownload(j *job, videoID string, file database.Vi
 	if err != nil {
 		return
 	}
+	slog.Info("download finished", "video", videoID, "file", file.ID, "label", label, "size", megabytes(probe.Size), "took", since(started))
 
 	rec := req.Resolve(d.caps, probe.Source)
 	if rec.Skip {
@@ -221,6 +229,8 @@ func (d *DownloaderService) runEncode(j *job, videoID string, file, source datab
 	}
 	defer d.encodes.release()
 	d.setStatus(j, videoID, file.ID, FileEncoding)
+	started := time.Now()
+	slog.Info("encode started", "video", videoID, "file", file.ID, "label", rec.Label)
 
 	src := SourceOf(source)
 	input := d.Path(*source.FileName)
@@ -260,9 +270,10 @@ func (d *DownloaderService) runEncode(j *job, videoID string, file, source datab
 	if _, err := d.complete(ctx, j, videoID, probe.mediaParams(file.ID, outName, rec.Label), makePrimary); err != nil {
 		return
 	}
+	slog.Info("encode finished", "video", videoID, "file", file.ID, "label", rec.Label, "size", megabytes(probe.Size), "took", since(started))
 	if removeSource {
 		if _, err := d.DeleteFile(context.Background(), videoID, source.ID); err != nil {
-			log.Printf("WARN [%s]: failed to remove source version: %v\n", file.ID, err)
+			slog.Warn("failed to remove source version", "video", videoID, "file", source.ID, "error", err)
 		}
 	}
 }
@@ -317,6 +328,7 @@ func (d *DownloaderService) DeleteFile(ctx context.Context, videoID, fileID stri
 	if file.FileName != nil {
 		d.deleted([]string{*file.FileName})
 	}
+	slog.Info("version deleted", "video", videoID, "file", fileID, "label", file.Label)
 	return v, nil
 }
 
@@ -344,12 +356,13 @@ func (d *DownloaderService) DeleteVideo(ctx context.Context, id string) (Video, 
 		names = append(names, *v.ThumbnailFileName)
 	}
 	d.deleted(names)
+	slog.Info("video deleted", "video", id, "name", v.Name, "versions", len(v.Files))
 	return v, nil
 }
 
 func (d *DownloaderService) setStatus(j *job, videoID, fileID, status string) {
 	if err := d.store.UpdateFileStatus(j.ctx, videoID, fileID, status); err != nil {
-		log.Printf("WARN [%s]: failed to set status %s: %v\n", fileID, status, err)
+		slog.Warn("failed to set status", "file", fileID, "status", status, "error", err)
 	}
 	j.update(Progress{VideoID: videoID, FileID: fileID, Stage: status}, true)
 }
@@ -358,15 +371,29 @@ func (d *DownloaderService) fail(j *job, videoID, fileID, command string, err er
 	status := FileError
 	if j.ctx.Err() != nil {
 		status = FileCanceled
+		slog.Info("job canceled", "video", videoID, "file", fileID)
 	} else {
-		log.Printf("ERROR [%s]: %s failed: %v\n", fileID, command, err)
-		d.recordError(videoID, fileID, command, errorMessage(err, output), output)
+		msg := errorMessage(err, output)
+		slog.Error("job failed", "video", videoID, "file", fileID, "tool", toolName(command), "error", msg)
+		d.recordError(videoID, fileID, command, msg, output)
 	}
 	if err := d.store.UpdateFileStatus(context.Background(), videoID, fileID, status); err != nil && !errors.Is(err, ErrNotFound) {
-		log.Printf("WARN [%s]: failed to set status %s: %v\n", fileID, status, err)
+		slog.Warn("failed to set status", "file", fileID, "status", status, "error", err)
 	}
 	j.update(Progress{VideoID: videoID, FileID: fileID, Stage: status}, true)
 }
+
+// toolName shortens a full command line to the program's name for logs.
+func toolName(command string) string {
+	if f := strings.Fields(command); len(f) > 0 {
+		return strings.TrimSuffix(filepath.Base(f[0]), ".exe")
+	}
+	return command
+}
+
+func megabytes(n int64) string { return fmt.Sprintf("%.1f MB", float64(n)/(1<<20)) }
+
+func since(t time.Time) time.Duration { return time.Since(t).Round(time.Second) }
 
 // errorMessage prefers the last "ERROR:" line a tool printed over a bare exit status.
 func errorMessage(err error, output string) string {
@@ -387,7 +414,7 @@ func (d *DownloaderService) recordError(videoID, fileID, command, message, outpu
 		ID: NewID(), VideoID: &videoID, FileID: &fileID, ErrorMessage: message, Command: command, Output: output,
 	})
 	if err != nil {
-		log.Printf("WARN: failed to record error: %v\n", err)
+		slog.Warn("failed to record error", "error", err)
 	}
 }
 
@@ -426,7 +453,7 @@ func (d *DownloaderService) applyInfo(ctx context.Context, videoID, fileID strin
 	}
 
 	if _, err := d.store.UpdateSource(ctx, params); err != nil {
-		log.Printf("WARN [%s]: failed to store source info: %v\n", fileID, err)
+		slog.Warn("failed to store source info", "file", fileID, "error", err)
 	}
 }
 
@@ -446,7 +473,7 @@ func (d *DownloaderService) removeFile(f database.VideoFile) {
 
 func (d *DownloaderService) remove(name string) {
 	if err := os.Remove(d.Path(name)); err != nil && !os.IsNotExist(err) {
-		log.Printf("WARN: failed to delete %s: %v\n", name, err)
+		slog.Warn("failed to delete file", "name", name, "error", err)
 	}
 }
 

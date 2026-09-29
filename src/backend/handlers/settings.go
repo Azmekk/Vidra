@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/Azmekk/Vidra/backend/services"
@@ -59,5 +60,6 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slog.Info("settings updated")
 	utils.RespondWithJSON(w, http.StatusOK, settings)
 }

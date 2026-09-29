@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -93,6 +94,7 @@ func (h *AuthHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 	default:
+		slog.Info("account created", "user", user.Username, "ip", middleware.ClientIPFrom(r.Context()))
 		h.Auth.SetCookie(w, session)
 		utils.RespondWithJSON(w, http.StatusCreated, toUser(user))
 	}
@@ -121,9 +123,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	user, session, err := h.Auth.Service.Login(r.Context(), strings.TrimSpace(req.Username), req.Password, req.Remember, r.UserAgent())
 	if err != nil {
+		utils.Annotate(w, "user", strings.TrimSpace(req.Username))
 		utils.RespondWithError(w, http.StatusUnauthorized, services.ErrInvalidCredentials.Error())
 		return
 	}
+	slog.Info("signed in", "user", user.Username, "ip", middleware.ClientIPFrom(r.Context()), "remember", req.Remember)
 	h.Auth.SetCookie(w, session)
 	utils.RespondWithJSON(w, http.StatusOK, toUser(user))
 }
@@ -137,6 +141,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(middleware.SessionCookie); err == nil {
 		_ = h.Auth.Service.Logout(r.Context(), c.Value)
+		slog.Info("signed out", "ip", middleware.ClientIPFrom(r.Context()))
 	}
 	h.Auth.ClearCookie(w)
 	w.WriteHeader(http.StatusNoContent)
@@ -171,6 +176,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 	default:
+		slog.Info("password changed, other sessions signed out", "user", user.Username)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -239,6 +245,7 @@ func (h *AuthHandler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slog.Info("API token created", "name", row.Name, "id", row.ID)
 	utils.RespondWithJSON(w, http.StatusCreated, CreateAPITokenResponse{
 		APITokenResponse: APITokenResponse{ID: row.ID, Name: row.Name, CreatedAt: row.CreatedAt},
 		Token:            token,
@@ -258,5 +265,6 @@ func (h *AuthHandler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slog.Info("API token deleted", "id", chi.URLParam(r, "id"))
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -282,7 +283,7 @@ func (s *BackupService) enqueue(j backupJob) {
 	select {
 	case s.jobs <- j:
 	default:
-		log.Println("WARN: backup queue is full, dropping job")
+		slog.Warn("backup queue is full, dropping job")
 	}
 }
 
@@ -357,7 +358,9 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		delete(s.running, t.ID)
 		s.mu.Unlock()
 	}()
+	started := time.Now()
 	if j.full {
+		slog.Info("backup started", "target", t.Name)
 		s.setStatus(ctx, t.ID, "running", "")
 	}
 
@@ -370,6 +373,7 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		s.recordError("rclone "+step+" ("+t.Name+")", err, output)
 	}
 
+	uploaded := 0
 	if t.IncludeVideos {
 		upload := j.upload
 		if j.full {
@@ -386,6 +390,8 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		if len(upload) > 0 {
 			if out, err := s.exec(ctx, t, fileList(upload), "copy", "--files-from-raw", "-", "--no-traverse", s.downloadsDir, s.remote(t, "downloads")); err != nil {
 				fail("upload", err, out)
+			} else {
+				uploaded = len(upload)
 			}
 		}
 		if len(j.remove) > 0 {
@@ -407,6 +413,8 @@ func (s *BackupService) runTarget(ctx context.Context, t database.BackupTarget, 
 		s.setStatus(context.Background(), t.ID, "error", strings.Join(errs, "; "))
 	case worked:
 		s.setStatus(context.Background(), t.ID, "ok", "")
+		slog.Info("backup finished", "target", t.Name, "full", j.full, "uploaded", uploaded,
+			"removed", len(j.remove), "database", t.IncludeDatabase && snapshot != "", "took", since(started))
 	}
 }
 
@@ -489,28 +497,28 @@ func (s *BackupService) remote(t database.BackupTarget, sub string) string {
 func (s *BackupService) setStatus(ctx context.Context, id, status, message string) {
 	t, err := s.queries.SetBackupTargetStatus(ctx, database.SetBackupTargetStatusParams{ID: id, LastStatus: status, LastError: message})
 	if err != nil {
-		log.Printf("WARN: failed to update backup status: %v\n", err)
+		slog.Warn("failed to update backup status", "error", err)
 		return
 	}
 	s.ws.Broadcast(WsEventBackupStatus, toBackupDTO(t))
 }
 
 func (s *BackupService) recordError(command string, err error, output string) {
-	log.Printf("ERROR: backup %s failed: %v\n", command, err)
+	slog.Error("backup failed", "step", command, "error", err)
 	if len(output) > maxOutput {
 		output = output[len(output)-maxOutput:]
 	}
 	if e := s.queries.CreateError(context.Background(), database.CreateErrorParams{
 		ID: NewID(), ErrorMessage: err.Error(), Command: command, Output: output,
 	}); e != nil {
-		log.Printf("WARN: failed to record error: %v\n", e)
+		slog.Warn("failed to record error", "error", e)
 	}
 }
 
 func (s *BackupService) mustList(ctx context.Context) []database.BackupTarget {
 	targets, err := s.queries.ListBackupTargets(ctx)
 	if err != nil {
-		log.Printf("WARN: failed to list backup targets: %v\n", err)
+		slog.Warn("failed to list backup targets", "error", err)
 	}
 	return targets
 }

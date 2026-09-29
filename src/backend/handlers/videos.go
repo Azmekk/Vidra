@@ -3,12 +3,14 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Azmekk/Vidra/backend/middleware"
 	"github.com/Azmekk/Vidra/backend/services"
 	"github.com/Azmekk/Vidra/backend/services/encoding"
 	"github.com/Azmekk/Vidra/backend/utils"
@@ -133,6 +135,7 @@ func (h *VideoHandler) startDownload(w http.ResponseWriter, r *http.Request, nam
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slog.Info("download queued", "video", video.ID, "url", url, "via", middleware.AuthMethod(r.Context()))
 	video, err = h.Store.Get(r.Context(), video.ID)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
@@ -250,6 +253,7 @@ func (h *VideoHandler) UpdateVideo(w http.ResponseWriter, r *http.Request) {
 	if respondStoreError(w, err) {
 		return
 	}
+	slog.Info("video renamed", "video", video.ID, "name", name)
 	utils.RespondWithJSON(w, http.StatusOK, services.ToVideoDTO(video))
 }
 
@@ -501,10 +505,18 @@ func sourceVersion(v services.Video, id string) (services.VideoFile, bool) {
 func sanitizeURL(w http.ResponseWriter, raw string) (string, bool) {
 	url, err := utils.SanitizeURL(strings.TrimSpace(raw))
 	if err != nil {
+		utils.Annotate(w, "input", truncate(raw, 300))
 		utils.RespondWithError(w, http.StatusBadRequest, "No valid link found in the text")
 		return "", false
 	}
 	return url, true
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 func respondStoreError(w http.ResponseWriter, err error) bool {

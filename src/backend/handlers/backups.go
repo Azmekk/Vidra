@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/Azmekk/Vidra/backend/services"
@@ -64,6 +65,7 @@ func (h *BackupHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	slog.Info("backup target created", "target", t.Name, "provider", t.Provider)
 	utils.RespondWithJSON(w, http.StatusCreated, t)
 }
 
@@ -94,6 +96,7 @@ func (h *BackupHandler) Update(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	slog.Info("backup target updated", "target", t.Name)
 	utils.RespondWithJSON(w, http.StatusOK, t)
 }
 
