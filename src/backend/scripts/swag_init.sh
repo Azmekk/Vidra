@@ -1,3 +1,3 @@
 #!/bin/bash
 
-swag init --output ./gen/docs/swagger --parseInternal
+swag init --output ./gen/docs/swagger --parseInternal --requiredByDefault
