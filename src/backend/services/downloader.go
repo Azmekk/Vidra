@@ -336,12 +336,23 @@ func (d *DownloaderService) fail(j *job, videoID, fileID, command string, err er
 		status = FileCanceled
 	} else {
 		log.Printf("ERROR [%s]: %s failed: %v\n", fileID, command, err)
-		d.recordError(videoID, fileID, command, err.Error(), output)
+		d.recordError(videoID, fileID, command, errorMessage(err, output), output)
 	}
 	if err := d.store.UpdateFileStatus(context.Background(), videoID, fileID, status); err != nil && !errors.Is(err, ErrNotFound) {
 		log.Printf("WARN [%s]: failed to set status %s: %v\n", fileID, status, err)
 	}
 	j.update(Progress{VideoID: videoID, FileID: fileID, Stage: status}, true)
+}
+
+// errorMessage prefers the last "ERROR:" line a tool printed over a bare exit status.
+func errorMessage(err error, output string) string {
+	lines := strings.Split(output, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if msg, ok := strings.CutPrefix(strings.TrimSpace(lines[i]), "ERROR:"); ok {
+			return strings.TrimSpace(msg)
+		}
+	}
+	return err.Error()
 }
 
 func (d *DownloaderService) recordError(videoID, fileID, command, message, output string) {
