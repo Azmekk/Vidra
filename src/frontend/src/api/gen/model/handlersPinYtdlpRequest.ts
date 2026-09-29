@@ -6,6 +6,6 @@
  * OpenAPI spec version: 2.0
  */
 
-export interface HandlersUpdateYtdlpResponse {
-  output: string;
+export interface HandlersPinYtdlpRequest {
+  version: string;
 }

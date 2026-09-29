@@ -6,17 +6,27 @@
  * OpenAPI spec version: 2.0
  */
 import {
-  useMutation
+  useMutation,
+  useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
-  UseMutationResult
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
-  HandlersUpdateYtdlpResponse,
+  HandlersPinYtdlpRequest,
+  ServicesYtdlpStatus,
   UtilsErrorResponse
 } from '../model';
 
@@ -28,7 +38,282 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getUpdateYtdlpUrl = () => {
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
+export const getGetYtdlpUrl = () => {
+
+
+
+
+  return `/api/yt-dlp`
+}
+
+/**
+ * @summary Get the installed yt-dlp version, the pin and recent releases
+ */
+export const getYtdlp = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ServicesYtdlpStatus> => {
+
+  return apiFetch<ServicesYtdlpStatus>(getGetYtdlpUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetYtdlpQueryKey = () => {
+    return [
+    `/api/yt-dlp`
+    ] as const;
+    }
+
+
+export const getGetYtdlpQueryOptions = <TData = Awaited<ReturnType<typeof getYtdlp>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetYtdlpQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getYtdlp>>> = ({ signal }) => getYtdlp({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetYtdlpQueryResult = NonNullable<Awaited<ReturnType<typeof getYtdlp>>>
+export type GetYtdlpQueryError = ErrorType<unknown>
+
+
+export function useGetYtdlp<TData = Awaited<ReturnType<typeof getYtdlp>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getYtdlp>>,
+          TError,
+          Awaited<ReturnType<typeof getYtdlp>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetYtdlp<TData = Awaited<ReturnType<typeof getYtdlp>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getYtdlp>>,
+          TError,
+          Awaited<ReturnType<typeof getYtdlp>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetYtdlp<TData = Awaited<ReturnType<typeof getYtdlp>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get the installed yt-dlp version, the pin and recent releases
+ */
+
+export function useGetYtdlp<TData = Awaited<ReturnType<typeof getYtdlp>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getYtdlp>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetYtdlpQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getPinYtdlpUrl = () => {
+
+
+
+
+  return `/api/yt-dlp/pin`
+}
+
+/**
+ * @summary Install a specific yt-dlp version and keep it
+ */
+export const pinYtdlp = async (handlersPinYtdlpRequest: HandlersPinYtdlpRequest, options?: Parameters<typeof apiFetch>[1]): Promise<ServicesYtdlpStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<ServicesYtdlpStatus>(getPinYtdlpUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(handlersPinYtdlpRequest)
+  }
+);}
+
+
+
+
+
+export const getPinYtdlpMutationKey = () => ['pinYtdlp'] as const;
+
+export const getPinYtdlpMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pinYtdlp>>, TError,PinYtdlpMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pinYtdlp>>, TError,PinYtdlpMutationVariables, TContext> => {
+
+const mutationKey = getPinYtdlpMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pinYtdlp>>, PinYtdlpMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  pinYtdlp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PinYtdlpMutationResult = NonNullable<Awaited<ReturnType<typeof pinYtdlp>>>
+    export type PinYtdlpMutationBody = HandlersPinYtdlpRequest
+    export type PinYtdlpMutationError = ErrorType<UtilsErrorResponse>
+    export type PinYtdlpMutationVariables = {data: HandlersPinYtdlpRequest}
+
+    /**
+ * @summary Install a specific yt-dlp version and keep it
+ */
+export const usePinYtdlp = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pinYtdlp>>, TError,PinYtdlpMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof pinYtdlp>>,
+        TError,
+        PinYtdlpMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPinYtdlpMutationOptions(options), queryClient);
+    }
+    export const getUnpinYtdlpUrl = () => {
+
+
+
+
+  return `/api/yt-dlp/pin`
+}
+
+/**
+ * @summary Follow the latest yt-dlp release again
+ */
+export const unpinYtdlp = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ServicesYtdlpStatus> => {
+
+  return apiFetch<ServicesYtdlpStatus>(getUnpinYtdlpUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnpinYtdlpMutationKey = () => ['unpinYtdlp'] as const;
+
+export const getUnpinYtdlpMutationOptions = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpinYtdlp>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unpinYtdlp>>, TError,void, TContext> => {
+
+const mutationKey = getUnpinYtdlpMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unpinYtdlp>>, void> = () => {
+
+
+          return  unpinYtdlp(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnpinYtdlpMutationResult = NonNullable<Awaited<ReturnType<typeof unpinYtdlp>>>
+
+    export type UnpinYtdlpMutationError = ErrorType<UtilsErrorResponse>
+
+
+    /**
+ * @summary Follow the latest yt-dlp release again
+ */
+export const useUnpinYtdlp = <TError = ErrorType<UtilsErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpinYtdlp>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof unpinYtdlp>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getUnpinYtdlpMutationOptions(options), queryClient);
+    }
+    export const getUpdateYtdlpUrl = () => {
 
 
 
@@ -37,12 +322,11 @@ export const getUpdateYtdlpUrl = () => {
 }
 
 /**
- * Runs yt-dlp -U to update the binary
- * @summary Update yt-dlp
+ * @summary Install the latest yt-dlp, or the pinned version
  */
-export const updateYtdlp = async ( options?: Parameters<typeof apiFetch>[1]): Promise<HandlersUpdateYtdlpResponse> => {
+export const updateYtdlp = async ( options?: Parameters<typeof apiFetch>[1]): Promise<ServicesYtdlpStatus> => {
 
-  return apiFetch<HandlersUpdateYtdlpResponse>(getUpdateYtdlpUrl(),
+  return apiFetch<ServicesYtdlpStatus>(getUpdateYtdlpUrl(),
   {
     ...options,
     method: 'POST'
@@ -90,7 +374,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
     /**
- * @summary Update yt-dlp
+ * @summary Install the latest yt-dlp, or the pinned version
  */
 export const useUpdateYtdlp = <TError = ErrorType<UtilsErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateYtdlp>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}

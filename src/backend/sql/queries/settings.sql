@@ -15,3 +15,9 @@ SET proxy_url = ?,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = 1
 RETURNING *;
+
+-- name: SetYtdlpVersion :exec
+UPDATE settings
+SET ytdlp_version = CAST(sqlc.arg(version) AS TEXT),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = 1;

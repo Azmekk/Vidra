@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Azmekk/Vidra/backend/gen/database"
@@ -63,7 +64,8 @@ func main() {
 		}
 	})
 
-	ytdlp := services.NewYtdlpService(settings)
+	ytdlp := services.NewYtdlpService(settings, filepath.Dir(cfg.DBPath))
+	ytdlp.Start(ctx)
 	downloader := services.NewDownloaderService(store, queries, ws, settings, ytdlp, caps, cfg.DownloadsDir)
 	downloader.RecoverInterrupted(ctx)
 

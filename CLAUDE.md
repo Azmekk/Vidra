@@ -51,6 +51,7 @@ Key services:
 - `services/encoding/`: ffmpeg capability detection, curated encoder catalog, `Profile.BuildArgs` and the goal-based recommender.
 - `services/auth.go` and `middleware/auth.go`: argon2id, sliding session cookie `vidra_session`, bearer API tokens, same-origin check for cookie-authenticated writes.
 - `middleware/client_ip.go`: client IP resolution (X-Forwarded-For trusted only from private peers) and per-IP rate limiting.
+- `services/ytdlp.go` and `ytdlp_versions.go`: builds yt-dlp commands and manages the binary in `<data>/bin`, installed from GitHub releases on startup and daily, pinnable from Settings (`settings.ytdlp_version`). The yt-dlp on PATH is only a fallback.
 - `services/backup.go`: rclone targets configured in Settings. Remotes are passed to rclone as `RCLONE_CONFIG_VIDRA_*` env vars per process. Secrets are masked in responses.
 - `services/websocket.go`: per-client buffered queues.
 
