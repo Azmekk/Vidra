@@ -122,7 +122,7 @@ export function EncodingEditor({ value, onChange, sourceFileId, source, hideOrig
 	);
 }
 
-function RecommendationCard({ rec, loading }: { rec?: EncodingRecommendation; loading: boolean }) {
+export function RecommendationCard({ rec, loading }: { rec?: EncodingRecommendation; loading: boolean }) {
 	if (loading || !rec) {
 		return (
 			<div className="space-y-3 rounded-3xl bg-muted/50 p-5">

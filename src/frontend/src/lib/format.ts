@@ -50,7 +50,7 @@ export const codecName = (c?: string) => (c ? (codecNames[c] ?? c.toUpperCase())
 
 export function fileSummary(f: VideoFile) {
 	return [
-		codecName(f.videoCodec),
+		f.videoCodec ? codecName(f.videoCodec) : codecName(f.audioCodec),
 		f.height ? `${f.height}p` : "",
 		f.fps ? `${Math.round(f.fps)}fps` : "",
 		f.container?.toUpperCase(),

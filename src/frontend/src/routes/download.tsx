@@ -1,13 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { Apple, ClipboardPaste, Download, Info, Loader2, Sparkles, Zap } from "lucide-react";
+import { Apple, ClipboardPaste, Download, Info, Loader2, Music, Sparkles, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { EncodingRequest, ServicesVideoMetadata, ServicesVideoOption } from "@/api/gen/model";
 import { useGetSettings } from "@/api/gen/settings/settings";
 import { useCreateVideo, useGetMetadata, useQuickDownload } from "@/api/gen/videos/videos";
+import { AudioFormatPicker, originalAudio } from "@/components/audio-format-picker";
 import { EncodingEditor } from "@/components/encoding-editor";
+import { SwitchRow } from "@/components/switch-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,9 @@ export function DownloadPage() {
 	const shared = search.url ?? search.text ?? search.title;
 	const [url, setUrl] = useState(shared ? extractUrl(shared) : "");
 	const [error, setError] = useState<string>();
+	const [audioOnly, setAudioOnly] = useState(false);
+	const [audioContainer, setAudioContainer] = useState(originalAudio);
+	const audioFormat = audioOnly ? audioContainer : undefined;
 	const metadata = useGetMetadata();
 	const quick = useQuickDownload({
 		mutation: {
@@ -80,7 +85,7 @@ export function DownloadPage() {
 				onSubmit={(e) => {
 					e.preventDefault();
 					const valid = validate();
-					if (valid) quick.mutate({ data: { url: valid } });
+					if (valid) quick.mutate({ data: { url: valid, audioFormat } });
 				}}
 			>
 				<div className="space-y-2">
@@ -118,6 +123,21 @@ export function DownloadPage() {
 					</div>
 					{error && <p className="px-1 font-medium text-destructive text-sm">{error}</p>}
 				</div>
+				<div className="space-y-4 rounded-2xl bg-muted/50 p-4">
+					<SwitchRow
+						label={
+							<span className="flex items-center gap-2">
+								<Music className="size-4" /> Audio only
+							</span>
+						}
+						description="Skip the video and keep just the sound"
+						checked={audioOnly}
+						onCheckedChange={setAudioOnly}
+					/>
+					{audioOnly && (
+						<AudioFormatPicker value={audioContainer} onChange={setAudioContainer} includeOriginal />
+					)}
+				</div>
 				<div className="grid gap-2 sm:grid-cols-2">
 					<Button
 						type="submit"
@@ -146,7 +166,9 @@ export function DownloadPage() {
 			</form>
 
 			{metadata.isPending && <MetadataSkeleton />}
-			{metadata.data && <FormatPicker key={url} url={extractUrl(url)} meta={metadata.data} />}
+			{metadata.data && (
+				<FormatPicker key={url} url={extractUrl(url)} meta={metadata.data} audioFormat={audioFormat} />
+			)}
 		</div>
 	);
 }
@@ -172,7 +194,15 @@ function MetadataSkeleton() {
 	);
 }
 
-function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata }) {
+function FormatPicker({
+	url,
+	meta,
+	audioFormat,
+}: {
+	url: string;
+	meta: ServicesVideoMetadata;
+	audioFormat?: string;
+}) {
 	const navigate = useNavigate();
 	const qc = useQueryClient();
 	const settings = useGetSettings();
@@ -180,7 +210,6 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 	const nameInvalid = nameError(name);
 	const [formatId, setFormatId] = useState<string>();
 	const [encoding, setEncoding] = useState<EncodingRequest>();
-	const option = meta.options.find((o) => o.formatId === formatId);
 	const value = encoding ?? settings.data?.defaultEncoding ?? { goal: "original" };
 
 	const create = useCreateVideo({
@@ -228,10 +257,68 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 				{nameInvalid && <p className="font-medium text-destructive text-sm">{nameInvalid}</p>}
 			</div>
 
+			{audioFormat ? (
+				<div className="flex items-center gap-3 rounded-2xl bg-muted/60 px-4 py-3">
+					<Music className="size-5 shrink-0" />
+					<span>
+						<span className="block font-bold">Audio only</span>
+						<span className="block text-muted-foreground text-sm">
+							{audioFormat === originalAudio
+								? "Best audio stream, kept as downloaded"
+								: `Best audio stream, converted to ${audioFormat.toUpperCase()}`}
+						</span>
+					</span>
+				</div>
+			) : (
+				<VideoOptions
+					meta={meta}
+					formatId={formatId}
+					onFormatChange={setFormatId}
+					encoding={value}
+					onEncodingChange={setEncoding}
+					loading={!settings.data}
+				/>
+			)}
+
+			<Button
+				size="lg"
+				className="h-12 w-full rounded-2xl font-bold text-base"
+				disabled={create.isPending || Boolean(nameInvalid)}
+				onClick={() =>
+					create.mutate({
+						data: { url, name: name.trim(), sourceTitle: meta.title, formatId, encoding: value, audioFormat },
+					})
+				}
+			>
+				{create.isPending ? <Loader2 className="animate-spin" /> : <Download />}
+				Download
+			</Button>
+		</div>
+	);
+}
+
+function VideoOptions({
+	meta,
+	formatId,
+	onFormatChange,
+	encoding,
+	onEncodingChange,
+	loading,
+}: {
+	meta: ServicesVideoMetadata;
+	formatId?: string;
+	onFormatChange: (formatId?: string) => void;
+	encoding: EncodingRequest;
+	onEncodingChange: (encoding: EncodingRequest) => void;
+	loading: boolean;
+}) {
+	const option = meta.options.find((o) => o.formatId === formatId);
+	return (
+		<>
 			<div className="space-y-2">
 				<Label className="font-semibold">Format</Label>
 				<div className="max-h-80 space-y-2 overflow-y-auto overscroll-contain">
-					<FormatOption selected={!formatId} onSelect={() => setFormatId(undefined)}>
+					<FormatOption selected={!formatId} onSelect={() => onFormatChange(undefined)}>
 						<span className="flex items-center gap-2 font-bold">
 							<Sparkles className="size-4" /> Best available
 						</span>
@@ -241,7 +328,7 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 						<FormatOption
 							key={o.formatId}
 							selected={formatId === o.formatId}
-							onSelect={() => setFormatId(o.formatId)}
+							onSelect={() => onFormatChange(o.formatId)}
 						>
 							<OptionLabel option={o} />
 						</FormatOption>
@@ -251,31 +338,17 @@ function FormatPicker({ url, meta }: { url: string; meta: ServicesVideoMetadata 
 
 			<div className="space-y-2">
 				<Label className="font-semibold">Encoding</Label>
-				{settings.data ? (
+				{loading ? (
+					<Skeleton className="h-40 w-full rounded-2xl" />
+				) : (
 					<EncodingEditor
-						value={value}
-						onChange={setEncoding}
+						value={encoding}
+						onChange={onEncodingChange}
 						source={option ? toSource(option, meta) : undefined}
 					/>
-				) : (
-					<Skeleton className="h-40 w-full rounded-2xl" />
 				)}
 			</div>
-
-			<Button
-				size="lg"
-				className="h-12 w-full rounded-2xl font-bold text-base"
-				disabled={create.isPending || Boolean(nameInvalid)}
-				onClick={() =>
-					create.mutate({
-						data: { url, name: name.trim(), sourceTitle: meta.title, formatId, encoding: value },
-					})
-				}
-			>
-				{create.isPending ? <Loader2 className="animate-spin" /> : <Download />}
-				Download
-			</Button>
-		</div>
+		</>
 	);
 }
 

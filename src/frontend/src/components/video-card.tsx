@@ -10,6 +10,7 @@ import {
 	Layers,
 	Link2,
 	Loader2,
+	Music,
 	Pencil,
 	Play,
 	Share,
@@ -42,6 +43,7 @@ import { canSaveToPhotos, downloadUrl, useSaveToPhotos } from "@/lib/save";
 import { cn } from "@/lib/utils";
 import {
 	activeStatuses,
+	isAudioFile,
 	primaryFile,
 	removeVideo,
 	upsertVideo,
@@ -61,7 +63,7 @@ const statusStyles: Record<string, string> = {
 export function VideoCard({ video }: { video: Video }) {
 	const [playing, setPlaying] = useState(false);
 	const [versionsOpen, setVersionsOpen] = useState(false);
-	const [encode, setEncode] = useState<{ open: boolean; source?: string; key: number }>({
+	const [encode, setEncode] = useState<{ open: boolean; source?: string; audio?: boolean; key: number }>({
 		open: false,
 		key: 0,
 	});
@@ -83,9 +85,9 @@ export function VideoCard({ video }: { video: Video }) {
 		},
 	});
 
-	const openEncode = (source?: string) => {
+	const openEncode = (source?: string, audio?: boolean) => {
 		setVersionsOpen(false);
-		setEncode((e) => ({ open: true, source, key: e.key + 1 }));
+		setEncode((e) => ({ open: true, source, audio, key: e.key + 1 }));
 	};
 
 	const copy = async (text: string, what: string) => {
@@ -100,6 +102,7 @@ export function VideoCard({ video }: { video: Video }) {
 					// biome-ignore lint/a11y/useMediaCaption: user videos have no captions
 					<video
 						src={primary.url}
+						poster={isAudioFile(primary) ? video.thumbnailUrl : undefined}
 						controls
 						autoPlay
 						playsInline
@@ -229,6 +232,12 @@ export function VideoCard({ video }: { video: Video }) {
 							<DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
 								<Layers /> Versions…
 							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={!video.files.some((f) => f.status === "completed" && f.audioCodec)}
+								onSelect={() => openEncode(undefined, true)}
+							>
+								<Music /> Convert to audio…
+							</DropdownMenuItem>
 							{ready && (
 								<DropdownMenuItem asChild>
 									<a href={primary.url} target="_blank" rel="noreferrer">
@@ -269,6 +278,7 @@ export function VideoCard({ video }: { video: Video }) {
 				video={video}
 				open={encode.open}
 				sourceFileId={encode.source}
+				audio={encode.audio}
 				onOpenChange={(open) => setEncode((e) => ({ ...e, open }))}
 			/>
 			<ConfirmDialog
@@ -415,7 +425,7 @@ function PrimaryAction({ video, file, status }: { video: Video; file?: VideoFile
 		);
 	}
 
-	if (!canSaveToPhotos) {
+	if (!canSaveToPhotos || isAudioFile(file)) {
 		return (
 			<Button asChild className={base}>
 				<a href={downloadUrl(file)} download>

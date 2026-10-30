@@ -42,6 +42,8 @@ export function primaryFile(video: Video): VideoFile | undefined {
 	return video.files.find((f) => f.id === video.primaryFileId) ?? video.files.at(-1);
 }
 
+export const isAudioFile = (f: VideoFile) => f.status === "completed" && !f.videoCodec;
+
 export function upsertVideo(qc: QueryClient, video: Video) {
 	qc.setQueryData(getGetVideoQueryKey(video.id), video);
 	let found = false;
