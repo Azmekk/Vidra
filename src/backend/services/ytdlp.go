@@ -23,6 +23,7 @@ type YtdlpService struct {
 type YtdlpDownloadOptions struct {
 	Format        string
 	OutputPattern string
+	AudioOnly     bool
 }
 
 // NewYtdlpService manages its own yt-dlp binary in dataDir/bin, so updates
@@ -70,7 +71,14 @@ func (s *YtdlpService) DownloadCommand(ctx context.Context, url string, opts Ytd
 	if opts.Format != "" {
 		args = append(args, "-f", opts.Format)
 	}
-	if s.settings.MustGet(ctx).PreferCompatibleFormats {
+	compatible := s.settings.MustGet(ctx).PreferCompatibleFormats
+	switch {
+	case opts.AudioOnly:
+		args = append(args, "--extract-audio")
+		if compatible {
+			args = append(args, "-S", "acodec:m4a")
+		}
+	case compatible:
 		args = append(args, "-S", "vcodec:h264,res,acodec:m4a", "--merge-output-format", "mp4")
 	}
 	args = append(args, s.baseArgs(ctx)...)

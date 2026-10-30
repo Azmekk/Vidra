@@ -13,6 +13,7 @@ type Mode string
 const (
 	ModeRemux  Mode = "remux"
 	ModeEncode Mode = "encode"
+	ModeAudio  Mode = "audio"
 )
 
 // Profile is a fully resolved set of ffmpeg choices for one output version.
@@ -43,6 +44,15 @@ type Source struct {
 }
 
 func (p Profile) Validate(caps *Capabilities) error {
+	if p.Mode == ModeAudio {
+		if _, ok := caps.FindAudioFormat(p.Container); !ok {
+			return fmt.Errorf("unsupported audio format %q", p.Container)
+		}
+		if p.AudioBitrate < 0 {
+			return fmt.Errorf("limits must be positive")
+		}
+		return nil
+	}
 	if !slices.Contains(caps.Containers, p.Container) {
 		return fmt.Errorf("unsupported container %q", p.Container)
 	}
@@ -94,6 +104,9 @@ func (p Profile) Args(caps *Capabilities, src Source, input, output string) ([]s
 	if err := p.Validate(caps); err != nil {
 		return nil, err
 	}
+	if p.Mode == ModeAudio {
+		return p.audioArgs(caps, src, input, output), nil
+	}
 
 	var args []string
 	video := copyVideo
@@ -131,6 +144,29 @@ func (p Profile) Args(caps *Capabilities, src Source, input, output string) ([]s
 
 	args = append(args, "-progress", "pipe:1", "-y", output)
 	return args, nil
+}
+
+// audioArgs extracts the first audio stream, copying it when it is already in the target codec.
+func (p Profile) audioArgs(caps *Capabilities, src Source, input, output string) []string {
+	f, _ := caps.FindAudioFormat(p.Container)
+	args := []string{"-hide_banner", "-nostats", "-loglevel", "error",
+		"-i", input, "-map", "0:a:0", "-map_metadata", "0", "-vn"}
+	if p.copiesAudio(f, src) {
+		args = append(args, "-c:a", "copy")
+	} else {
+		args = append(args, "-c:a", f.Encoder)
+		if bitrate := cmp.Or(p.AudioBitrate, f.DefaultBitrate); bitrate > 0 && !f.Lossless {
+			args = append(args, "-b:a", strconv.Itoa(bitrate)+"k")
+		}
+	}
+	if p.Container == "m4a" {
+		args = append(args, "-movflags", "+faststart")
+	}
+	return append(args, "-progress", "pipe:1", "-y", output)
+}
+
+func (p Profile) copiesAudio(f AudioFormat, src Source) bool {
+	return p.AudioBitrate == 0 && src.AudioCodec != "" && NormalizeAudio(src.AudioCodec) == NormalizeAudio(f.Encoder)
 }
 
 func (p Profile) videoArgs(v VideoEncoder, src Source) []string {
@@ -178,6 +214,9 @@ func (p Profile) Extension() string { return "." + p.Container }
 
 // Label is a short human description such as "HEVC · 1080p".
 func (p Profile) Label(caps *Capabilities, src Source) string {
+	if p.Mode == ModeAudio {
+		return "Audio · " + strings.ToUpper(p.Container)
+	}
 	res := ""
 	if h := p.OutputHeight(src); h > 0 {
 		res = " · " + strconv.Itoa(h) + "p"
@@ -194,6 +233,9 @@ func (p Profile) Label(caps *Capabilities, src Source) string {
 
 // IOSCompatible reports whether the output can be saved to Photos on iOS.
 func (p Profile) IOSCompatible(caps *Capabilities, src Source) bool {
+	if p.Mode == ModeAudio {
+		return false
+	}
 	return IsIOSCompatible(p.outputVideoFamily(caps, src), p.outputAudio(src), p.Container)
 }
 

@@ -32,6 +32,7 @@ type Capabilities struct {
 	Video         []EncoderInfo `json:"video"`
 	Audio         []AudioInfo   `json:"audio"`
 	Containers    []string      `json:"containers"`
+	AudioFormats  []AudioFormat `json:"audioFormats"`
 
 	video map[string]EncoderInfo
 	audio map[string]AudioInfo
@@ -45,6 +46,15 @@ func (c *Capabilities) FindVideo(name string) (EncoderInfo, bool) {
 func (c *Capabilities) FindAudio(name string) (AudioInfo, bool) {
 	a, ok := c.audio[name]
 	return a, ok
+}
+
+func (c *Capabilities) FindAudioFormat(container string) (AudioFormat, bool) {
+	for _, f := range c.AudioFormats {
+		if f.Container == container {
+			return f, true
+		}
+	}
+	return AudioFormat{}, false
 }
 
 // firstAvailable returns the first usable encoder in preference order.
@@ -104,6 +114,12 @@ func Detect(ctx context.Context) *Capabilities {
 	for _, a := range audioCatalog {
 		if _, ok := byName[a.Name]; ok {
 			caps.audio[a.Name] = AudioInfo{AudioEncoder: a, Curated: true}
+		}
+	}
+	caps.AudioFormats = []AudioFormat{}
+	for _, f := range audioFormatCatalog {
+		if _, ok := byName[f.Encoder]; ok {
+			caps.AudioFormats = append(caps.AudioFormats, f)
 		}
 	}
 

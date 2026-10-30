@@ -35,6 +35,9 @@ func (s Settings) Validate(caps *encoding.Capabilities) error {
 	if s.MaxConcurrentEncodes < 1 || s.MaxConcurrentEncodes > 8 {
 		return fmt.Errorf("concurrent encodes must be between 1 and 8")
 	}
+	if s.DefaultEncoding.Goal == encoding.GoalAudio {
+		return fmt.Errorf("the default encoding cannot be audio only")
+	}
 	return s.DefaultEncoding.Validate(caps)
 }
 

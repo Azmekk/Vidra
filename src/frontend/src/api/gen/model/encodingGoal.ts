@@ -16,4 +16,5 @@ export const EncodingGoal = {
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 } as const;

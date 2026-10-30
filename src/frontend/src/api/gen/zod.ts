@@ -254,6 +254,14 @@ export const GetEncodingCapabilitiesResponse = zod.object({
   "lossless": zod.boolean().optional(),
   "name": zod.string()
 })),
+  "audioFormats": zod.array(zod.object({
+  "container": zod.string(),
+  "defaultBitrate": zod.int().optional(),
+  "description": zod.string(),
+  "encoder": zod.string(),
+  "label": zod.string(),
+  "lossless": zod.boolean().optional()
+})),
   "containers": zod.array(zod.string()),
   "ffmpegVersion": zod.string(),
   "video": zod.array(zod.object({
@@ -299,6 +307,7 @@ export const RecommendEncodingBody = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -316,6 +325,7 @@ export const RecommendEncodingBody = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -344,6 +354,7 @@ export const RecommendEncodingResponse = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "iosCompatible": zod.boolean(),
   "label": zod.string(),
@@ -363,6 +374,7 @@ export const RecommendEncodingResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -428,6 +440,7 @@ export const GetSettingsResponse = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -445,6 +458,7 @@ export const GetSettingsResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -474,6 +488,7 @@ export const UpdateSettingsBody = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -491,6 +506,7 @@ export const UpdateSettingsBody = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -516,6 +532,7 @@ export const UpdateSettingsResponse = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -533,6 +550,7 @@ export const UpdateSettingsResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -598,6 +616,7 @@ export const ListVideosResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -636,6 +655,7 @@ export const ListVideosResponse = zod.object({
  * @summary Download a video with chosen format and encoding
  */
 export const CreateVideoBody = zod.object({
+  "audioFormat": zod.string().optional().describe('AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container. Overrides formatId and encoding.'),
   "encoding": zod.object({
   "goal": zod.enum({
   GoalOriginal: 'original',
@@ -644,6 +664,7 @@ export const CreateVideoBody = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -661,6 +682,7 @@ export const CreateVideoBody = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -698,6 +720,7 @@ export const CreateVideoResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -782,6 +805,7 @@ export const ListProgressResponse = zod.array(ListProgressResponseItem)
  * @summary Start a download immediately with default settings and a random name
  */
 export const QuickDownloadBody = zod.object({
+  "audioFormat": zod.string().optional().describe('AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container.'),
   "url": zod.string()
 })
 
@@ -809,6 +833,7 @@ export const QuickDownloadResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -884,6 +909,7 @@ export const GetVideoResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -953,6 +979,7 @@ export const UpdateVideoResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -1013,6 +1040,7 @@ export const CreateVersionBody = zod.object({
   GoalSmallest: 'smallest',
   GoalFastest: 'fastest',
   GoalCustom: 'custom',
+  GoalAudio: 'audio',
 }),
   "profile": zod.object({
   "audioBitrate": zod.int().optional(),
@@ -1030,6 +1058,7 @@ export const CreateVersionBody = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -1062,6 +1091,7 @@ export const CreateVersionResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -1118,6 +1148,7 @@ export const DeleteVersionResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),
@@ -1187,6 +1218,7 @@ export const UpdateVersionResponse = zod.object({
   "mode": zod.enum({
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 }),
   "preset": zod.string().optional(),
   "quality": zod.int().optional(),

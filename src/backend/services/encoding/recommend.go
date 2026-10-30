@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 )
@@ -14,9 +15,15 @@ const (
 	GoalSmallest   Goal = "smallest"
 	GoalFastest    Goal = "fastest"
 	GoalCustom     Goal = "custom"
+	GoalAudio      Goal = "audio"
 )
 
-var Goals = []Goal{GoalOriginal, GoalCompatible, GoalBalanced, GoalSmallest, GoalFastest, GoalCustom}
+var Goals = []Goal{GoalOriginal, GoalCompatible, GoalBalanced, GoalSmallest, GoalFastest, GoalCustom, GoalAudio}
+
+// AudioRequest converts a source to an audio-only file in the given container.
+func AudioRequest(container string) Request {
+	return Request{Goal: GoalAudio, Profile: &Profile{Mode: ModeAudio, Container: container}}
+}
 
 // Request is what a user asks for: a goal, or a custom profile.
 type Request struct {
@@ -40,6 +47,11 @@ func (r Request) Validate(caps *Capabilities) error {
 			return fmt.Errorf("custom goal requires a profile")
 		}
 		return r.Profile.Validate(caps)
+	case GoalAudio:
+		if r.Profile == nil || r.Profile.Mode != ModeAudio {
+			return fmt.Errorf("audio goal requires an audio profile")
+		}
+		return r.Profile.Validate(caps)
 	case GoalOriginal, GoalCompatible, GoalBalanced, GoalSmallest, GoalFastest:
 		return nil
 	}
@@ -52,7 +64,32 @@ func (r Request) Resolve(caps *Capabilities, src Source) Recommendation {
 		p := *r.Profile
 		return finish(caps, src, GoalCustom, p, []string{"Using your custom settings."})
 	}
+	if r.Goal == GoalAudio && r.Profile != nil {
+		return recommendAudio(caps, *r.Profile, src)
+	}
 	return Recommend(caps, r.Goal, src)
+}
+
+func recommendAudio(caps *Capabilities, p Profile, src Source) Recommendation {
+	f, _ := caps.FindAudioFormat(p.Container)
+	rec := Recommendation{Goal: GoalAudio, Profile: p, Label: p.Label(caps, src)}
+	switch {
+	case src.VideoCodec == "" && src.Container == p.Container:
+		rec.Skip = true
+		rec.Reasons = []string{fmt.Sprintf("This version is already %s audio.", f.Label)}
+	case p.copiesAudio(f, src):
+		rec.Reasons = []string{fmt.Sprintf("The audio track is already %s, so it is copied without quality loss.", strings.ToUpper(NormalizeAudio(src.AudioCodec)))}
+	case f.Lossless && src.AudioCodec != "":
+		rec.Reasons = []string{fmt.Sprintf("The %s audio track is stored losslessly as %s. This keeps its quality but cannot improve it.", strings.ToUpper(NormalizeAudio(src.AudioCodec)), f.Label)}
+	case f.Lossless:
+		rec.Reasons = []string{fmt.Sprintf("The audio track is stored losslessly as %s.", f.Label)}
+	default:
+		rec.Reasons = []string{fmt.Sprintf("The audio track is converted to %s at %d kbps.", f.Label, cmp.Or(p.AudioBitrate, f.DefaultBitrate))}
+	}
+	if src.VideoCodec != "" {
+		rec.Reasons = append(rec.Reasons, "The video is dropped.")
+	}
+	return rec
 }
 
 // Recommend picks encoding settings for a goal using simple, explainable rules.

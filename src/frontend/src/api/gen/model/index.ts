@@ -6,6 +6,7 @@
  * OpenAPI spec version: 2.0
  */
 
+export * from './encodingAudioFormat.ts';
 export * from './encodingAudioInfo.ts';
 export * from './encodingCapabilities.ts';
 export * from './encodingEncoderInfo.ts';

@@ -25,6 +25,7 @@ import (
 var (
 	ErrNothingToDo   = errors.New("the source already matches these settings")
 	ErrFileNotReady  = errors.New("file version is not ready")
+	ErrNoAudio       = errors.New("this version has no audio track")
 	ytdlpProgressRe  = regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%\s+of\s+.*?\s+at\s+(.+?)\s+ETA\s+(\S+)`)
 	skipDownloadExts = []string{".jpg", ".jpeg", ".png", ".webp", ".json", ".part", ".ytdl", ".temp"}
 )
@@ -114,7 +115,8 @@ func (d *DownloaderService) RecoverInterrupted(ctx context.Context) {
 }
 
 // StartDownload creates the original file version and downloads it in the background.
-func (d *DownloaderService) StartDownload(ctx context.Context, v Video, url, formatID string, req encoding.Request) (database.VideoFile, error) {
+// With audioOnly the best audio stream is downloaded instead and formatID is ignored.
+func (d *DownloaderService) StartDownload(ctx context.Context, v Video, url, formatID string, audioOnly bool, req encoding.Request) (database.VideoFile, error) {
 	file, err := d.store.CreateFile(ctx, database.CreateVideoFileParams{
 		VideoID: v.ID, Kind: KindOriginal, Label: "Original", Status: FileQueued,
 	})
@@ -122,7 +124,7 @@ func (d *DownloaderService) StartDownload(ctx context.Context, v Video, url, for
 		return database.VideoFile{}, err
 	}
 	j := d.start(v.ID, file.ID)
-	go d.runDownload(j, v.ID, file, url, formatID, req)
+	go d.runDownload(j, v.ID, file, url, formatID, audioOnly, req)
 	return file, nil
 }
 
@@ -133,6 +135,9 @@ func (d *DownloaderService) StartEncode(ctx context.Context, v Video, source dat
 	}
 	if err := req.Validate(d.caps); err != nil {
 		return database.VideoFile{}, err
+	}
+	if req.Goal == encoding.GoalAudio && source.AudioCodec == nil {
+		return database.VideoFile{}, ErrNoAudio
 	}
 	rec := req.Resolve(d.caps, SourceOf(source))
 	if rec.Skip {
@@ -160,7 +165,7 @@ func (d *DownloaderService) enqueueEncode(ctx context.Context, videoID string, s
 	return file, nil
 }
 
-func (d *DownloaderService) runDownload(j *job, videoID string, file database.VideoFile, url, formatID string, req encoding.Request) {
+func (d *DownloaderService) runDownload(j *job, videoID string, file database.VideoFile, url, formatID string, audioOnly bool, req encoding.Request) {
 	defer d.done(file.ID)
 	ctx := j.ctx
 
@@ -171,15 +176,19 @@ func (d *DownloaderService) runDownload(j *job, videoID string, file database.Vi
 	defer d.downloads.release()
 	d.setStatus(j, videoID, file.ID, FileDownloading)
 	started := time.Now()
-	slog.Info("download started", "video", videoID, "file", file.ID, "url", url, "format", cmp.Or(formatID, "best"))
-
 	format := ""
 	if formatID != "" {
 		format = formatID + "+bestaudio/" + formatID
 	}
+	if audioOnly {
+		format = "bestaudio/best"
+	}
+	slog.Info("download started", "video", videoID, "file", file.ID, "url", url, "format", cmp.Or(format, "best"))
+
 	cmd := d.ytdlp.DownloadCommand(ctx, url, YtdlpDownloadOptions{
 		Format:        format,
 		OutputPattern: filepath.Join(d.dir, file.ID+".%(ext)s"),
+		AudioOnly:     audioOnly,
 	})
 	output, err := runStreaming(cmd, func(line string) {
 		if m := ytdlpProgressRe.FindStringSubmatch(line); m != nil {
@@ -206,8 +215,11 @@ func (d *DownloaderService) runDownload(j *job, videoID string, file database.Vi
 		return
 	}
 	label := "Original"
-	if probe.Height > 0 {
+	switch {
+	case probe.Height > 0:
 		label += fmt.Sprintf(" · %dp", probe.Height)
+	case probe.VideoCodec == "":
+		label += " · Audio"
 	}
 	file, err = d.complete(ctx, j, videoID, probe.mediaParams(file.ID, filepath.Base(path), label), true)
 	if err != nil {

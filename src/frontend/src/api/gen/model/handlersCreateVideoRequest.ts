@@ -8,6 +8,8 @@
 import type { EncodingRequest } from './encodingRequest.ts';
 
 export interface HandlersCreateVideoRequest {
+  /** AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container. Overrides formatId and encoding. */
+  audioFormat?: string;
   encoding: EncodingRequest;
   formatId?: string;
   name: string;

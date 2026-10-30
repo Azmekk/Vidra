@@ -196,6 +196,23 @@ var audioCatalog = []AudioEncoder{
 var copyAudio = AudioEncoder{Name: "copy", Label: "Keep audio stream", Description: "No re-encode.",
 	Containers: []string{"mp4", "mkv", "mov", "webm"}}
 
+// AudioFormat is an audio-only output file, identified by its container.
+type AudioFormat struct {
+	Container      string `json:"container"`
+	Label          string `json:"label"`
+	Description    string `json:"description"`
+	Encoder        string `json:"encoder"`
+	DefaultBitrate int    `json:"defaultBitrate,omitempty"`
+	Lossless       bool   `json:"lossless,omitempty"`
+}
+
+var audioFormatCatalog = []AudioFormat{
+	{Container: "mp3", Label: "MP3", Description: "Plays everywhere", Encoder: "libmp3lame", DefaultBitrate: 192},
+	{Container: "m4a", Label: "M4A", Description: "AAC, smaller than MP3", Encoder: "aac", DefaultBitrate: 192},
+	{Container: "flac", Label: "FLAC", Description: "Lossless", Encoder: "flac", Lossless: true},
+	{Container: "wav", Label: "WAV", Description: "Uncompressed, large", Encoder: "pcm_s16le", Lossless: true},
+}
+
 // valueFor returns the encoder value for a level, adjusted for output height.
 func (q *QualityParam) valueFor(level Level, height int) int {
 	v, ok := q.Levels[level]

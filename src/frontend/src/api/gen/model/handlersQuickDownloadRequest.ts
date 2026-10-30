@@ -7,5 +7,7 @@
  */
 
 export interface HandlersQuickDownloadRequest {
+  /** AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container. */
+  audioFormat?: string;
   url: string;
 }

@@ -16,6 +16,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func init() {
+	for ext, typ := range map[string]string{
+		".flac": "audio/flac", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".opus": "audio/ogg", ".wav": "audio/wav",
+	} {
+		_ = mime.AddExtensionType(ext, typ)
+	}
+}
+
 type VideoHandler struct {
 	Store      *services.VideoStore
 	Downloader *services.DownloaderService
@@ -59,12 +67,17 @@ func (h *VideoHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusOK, metadata)
 }
 
+// originalAudio as an audio format keeps the downloaded audio stream as is.
+const originalAudio = "original"
+
 type CreateVideoRequest struct {
 	Name        string           `json:"name"`
 	URL         string           `json:"url"`
 	SourceTitle string           `json:"sourceTitle,omitempty"`
 	FormatID    string           `json:"formatId,omitempty"`
 	Encoding    encoding.Request `json:"encoding"`
+	// AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container. Overrides formatId and encoding.
+	AudioFormat string `json:"audioFormat,omitempty"`
 }
 
 // CreateVideo godoc
@@ -82,7 +95,11 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-	if err := req.Encoding.Validate(h.Downloader.Capabilities()); err != nil {
+	enc, formatID := req.Encoding, req.FormatID
+	if req.AudioFormat != "" {
+		enc, formatID = audioEncoding(req.AudioFormat), ""
+	}
+	if err := enc.Validate(h.Downloader.Capabilities()); err != nil {
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -98,11 +115,13 @@ func (h *VideoHandler) CreateVideo(w http.ResponseWriter, r *http.Request) {
 	if req.SourceTitle != "" {
 		sourceTitle = &req.SourceTitle
 	}
-	h.startDownload(w, r, name, sourceTitle, req.URL, req.FormatID, req.Encoding)
+	h.startDownload(w, r, name, sourceTitle, req.URL, formatID, req.AudioFormat != "", enc)
 }
 
 type QuickDownloadRequest struct {
 	URL string `json:"url"`
+	// AudioFormat downloads audio only, kept as is ("original") or converted to an audio format container.
+	AudioFormat string `json:"audioFormat,omitempty"`
 }
 
 // QuickDownload godoc
@@ -120,11 +139,25 @@ func (h *VideoHandler) QuickDownload(w http.ResponseWriter, r *http.Request) {
 	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
-	settings := h.Settings.MustGet(r.Context())
-	h.startDownload(w, r, utils.RandomName(), nil, req.URL, "", settings.DefaultEncoding)
+	enc := h.Settings.MustGet(r.Context()).DefaultEncoding
+	if req.AudioFormat != "" {
+		enc = audioEncoding(req.AudioFormat)
+		if err := enc.Validate(h.Downloader.Capabilities()); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	h.startDownload(w, r, utils.RandomName(), nil, req.URL, "", req.AudioFormat != "", enc)
 }
 
-func (h *VideoHandler) startDownload(w http.ResponseWriter, r *http.Request, name string, sourceTitle *string, rawURL, formatID string, req encoding.Request) {
+func audioEncoding(format string) encoding.Request {
+	if format == originalAudio {
+		return encoding.Request{Goal: encoding.GoalOriginal}
+	}
+	return encoding.AudioRequest(format)
+}
+
+func (h *VideoHandler) startDownload(w http.ResponseWriter, r *http.Request, name string, sourceTitle *string, rawURL, formatID string, audioOnly bool, req encoding.Request) {
 	url, ok := sanitizeURL(w, rawURL)
 	if !ok {
 		return
@@ -134,11 +167,11 @@ func (h *VideoHandler) startDownload(w http.ResponseWriter, r *http.Request, nam
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if _, err := h.Downloader.StartDownload(r.Context(), video, url, formatID, req); err != nil {
+	if _, err := h.Downloader.StartDownload(r.Context(), video, url, formatID, audioOnly, req); err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	slog.Info("download queued", "video", video.ID, "url", url, "via", middleware.AuthMethod(r.Context()))
+	slog.Info("download queued", "video", video.ID, "url", url, "audio_only", audioOnly, "via", middleware.AuthMethod(r.Context()))
 	video, err = h.Store.Get(r.Context(), video.ID)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
@@ -358,7 +391,7 @@ func (h *VideoHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 	makePrimary := req.MakePrimary == nil || *req.MakePrimary
 	file, err := h.Downloader.StartEncode(r.Context(), video, source, req.Encoding, makePrimary)
 	switch {
-	case errors.Is(err, services.ErrNothingToDo), errors.Is(err, services.ErrFileNotReady):
+	case errors.Is(err, services.ErrNothingToDo), errors.Is(err, services.ErrFileNotReady), errors.Is(err, services.ErrNoAudio):
 		utils.RespondWithError(w, http.StatusConflict, err.Error())
 	case err != nil:
 		utils.RespondWithError(w, http.StatusBadRequest, err.Error())

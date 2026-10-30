@@ -12,4 +12,5 @@ export type EncodingMode = typeof EncodingMode[keyof typeof EncodingMode];
 export const EncodingMode = {
   ModeRemux: 'remux',
   ModeEncode: 'encode',
+  ModeAudio: 'audio',
 } as const;

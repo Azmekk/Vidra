@@ -5,11 +5,13 @@
  * REST API for Vidra video downloader and manager
  * OpenAPI spec version: 2.0
  */
+import type { EncodingAudioFormat } from './encodingAudioFormat.ts';
 import type { EncodingAudioInfo } from './encodingAudioInfo.ts';
 import type { EncodingEncoderInfo } from './encodingEncoderInfo.ts';
 
 export interface EncodingCapabilities {
   audio: EncodingAudioInfo[];
+  audioFormats: EncodingAudioFormat[];
   containers: string[];
   ffmpegVersion: string;
   video: EncodingEncoderInfo[];
